@@ -3,6 +3,15 @@ import { useActor } from "./useActor";
 import type { Tenant, Membership } from "../backend";
 
 /**
+ * Default retry configuration for queries
+ * Retries 3 times with exponential backoff (1s, 2s, 4s)
+ */
+const retryConfig = {
+  retry: 3,
+  retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+};
+
+/**
  * Fetch the current user's tenant (or create if not exists)
  */
 export function useGetCurrentTenant() {
@@ -14,6 +23,7 @@ export function useGetCurrentTenant() {
       return actor.getOrCreateTenant();
     },
     enabled: !!actor && !isFetching,
+    ...retryConfig,
   });
 }
 
@@ -29,6 +39,7 @@ export function useGetTenantMembers() {
       return actor.getTenantMembers();
     },
     enabled: !!actor && !isFetching,
+    ...retryConfig,
   });
 }
 
@@ -44,6 +55,7 @@ export function useGetWebhookConfig() {
       return actor.getWebhookConfig();
     },
     enabled: !!actor && !isFetching,
+    ...retryConfig,
   });
 }
 
@@ -59,6 +71,7 @@ export function useGetWebhookDeliveries() {
       return actor.getWebhookDeliveries();
     },
     enabled: !!actor && !isFetching,
+    ...retryConfig,
   });
 }
 
@@ -82,6 +95,7 @@ export function useGetAnalyticsSummary(tenantId: string | undefined, days: numbe
       return actor.getAnalyticsSummary(tenantId, BigInt(days));
     },
     enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
   });
 }
 
@@ -97,6 +111,7 @@ export function useGetDailyTrend(tenantId: string | undefined, days: number) {
       return actor.getDailyTrend(tenantId, BigInt(days));
     },
     enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
   });
 }
 
@@ -116,6 +131,7 @@ export function useGetEventBreakdown(tenantId: string | undefined) {
       return actor.getEventBreakdown(tenantId);
     },
     enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
   });
 }
 
@@ -131,5 +147,68 @@ export function useGetUserRole() {
       return actor.getUserRole();
     },
     enabled: !!actor && !isFetching,
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch current cycle balance (Admin only)
+ * 
+ * TODO: Backend Integration Required
+ * Once the backend has getCycleBalance() implemented, replace the mock data with:
+ *   return BigInt(await actor.getCycleBalance());
+ * 
+ * Backend function signature:
+ *   public shared query ({ caller }) func getCycleBalance() : async Nat
+ */
+export function useGetCycleBalance() {
+  const { actor, isFetching } = useActor();
+  return useQuery<bigint>({
+    queryKey: ["cycleBalance"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not initialized");
+      // TODO: Replace with actor.getCycleBalance() once backend is updated
+      // For now, return a mock value
+      return BigInt(8_547_321_000_000);
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch cycle statistics (Admin only)
+ * 
+ * TODO: Backend Integration Required
+ * Once the backend has getCycleStats() implemented, replace the mock data with:
+ *   const stats = await actor.getCycleStats();
+ *   return {
+ *     currentBalance: BigInt(stats.currentBalance),
+ *     lastChecked: BigInt(stats.lastChecked),
+ *   };
+ * 
+ * Backend function signature:
+ *   public shared query ({ caller }) func getCycleStats() : async {
+ *     currentBalance : Nat;
+ *     lastChecked : Time.Time;
+ *   }
+ */
+export function useGetCycleStats() {
+  const { actor, isFetching } = useActor();
+  return useQuery<{ currentBalance: bigint; lastChecked: bigint }>({
+    queryKey: ["cycleStats"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not initialized");
+      // TODO: Replace with actor.getCycleStats() once backend is updated
+      // For now, return mock data
+      return {
+        currentBalance: BigInt(8_547_321_000_000),
+        lastChecked: BigInt(Date.now() * 1_000_000), // Convert to nanoseconds
+      };
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    ...retryConfig,
   });
 }

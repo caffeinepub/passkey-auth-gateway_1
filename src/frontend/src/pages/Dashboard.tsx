@@ -46,6 +46,10 @@ import type { Role } from "../backend";
 import { useState } from "react";
 import { useActor } from "../hooks/useActor";
 import { SimpleLineChart } from "../components/SimpleLineChart";
+import { getUserFriendlyError, getToastErrorMessage } from "../lib/errorMessages";
+import { ErrorCard } from "../components/ErrorCard";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { toast } from "sonner";
 
 /**
  * Truncate a principal for display
@@ -133,6 +137,7 @@ export default function Dashboard() {
     data: tenant,
     isLoading: tenantLoading,
     error: tenantError,
+    refetch: refetchTenant,
   } = useGetCurrentTenant();
   const {
     data: members,
@@ -190,9 +195,10 @@ export default function Dashboard() {
       setShowRegenerateDialog(false);
       setShowKeyRevealDialog(true);
       setIsRevealed(true);
+      toast.success("API key regenerated successfully");
     } catch (err) {
       console.error("Failed to regenerate API key:", err);
-      alert("Failed to regenerate API key. Please try again.");
+      toast.error(getToastErrorMessage(err));
     } finally {
       setIsRegenerating(false);
     }
@@ -230,23 +236,17 @@ export default function Dashboard() {
         </div>
       )}
         {/* Error State */}
-      {error && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-              <CardTitle className="text-destructive">Error</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error
-                ? error.message
-                : "Failed to load tenant data"}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {error && (() => {
+        const friendlyError = getUserFriendlyError(error);
+        return (
+          <ErrorCard
+            title={friendlyError.title}
+            message={friendlyError.message}
+            canRetry={friendlyError.canRetry}
+            onRetry={friendlyError.canRetry ? refetchTenant : undefined}
+          />
+        );
+      })()}
 
       {/* Analytics Section */}
       {tenant && !isLoading && (
@@ -262,6 +262,7 @@ export default function Dashboard() {
               {/* Period Toggle */}
               <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
                 <button
+                  type="button"
                   onClick={() => setAnalyticsPeriod(7)}
                   className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                     analyticsPeriod === 7
@@ -272,6 +273,7 @@ export default function Dashboard() {
                   7 days
                 </button>
                 <button
+                  type="button"
                   onClick={() => setAnalyticsPeriod(30)}
                   className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                     analyticsPeriod === 30
@@ -610,14 +612,14 @@ export default function Dashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {members.map((member, index) => {
+                    {members.map((member) => {
                       const principalStr = member.user.toString();
                       const isCurrentUser =
                         identity && principalStr === identity.getPrincipal().toString();
                       const roleBadge = getRoleBadge(member.role);
 
                       return (
-                        <TableRow key={`${principalStr}-${index}`}>
+                        <TableRow key={principalStr}>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-2 py-1 rounded">

@@ -30,13 +30,13 @@ import { toast } from "sonner";
 
 // Code samples for the integration section
 const jsCodeSample = `// Add authentication in 3 lines of code
-import { authenticate } from '@passkey-gateway/sdk'
+import { authenticate } from '@avantkey/sdk'
 
 const user = await authenticate(request, {
   apiKey: 'pk_live_your_key_here'
 })`;
 
-const curlCodeSample = `curl https://api.passkey-gateway.com/auth/verify \\
+const curlCodeSample = `curl https://api.avantkey.com/auth/verify \\
   -H "Authorization: Bearer pk_live_your_key_here" \\
   -d "token=..."`;
 
@@ -76,7 +76,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <Shield className="w-6 h-6 text-primary" />
             <span className="font-display font-semibold text-lg">
-              PasskeyAuth
+              Avantkey
             </span>
           </div>
 
@@ -138,14 +138,13 @@ export default function LandingPage() {
               </div>
 
               <h1 className="text-5xl md:text-7xl font-display font-bold tracking-tight">
-                Passkey Authentication
+                Eliminate Passwords.
                 <br />
-                <span className="text-primary">for Developers</span>
+                <span className="text-primary">Prevent Data Breaches.</span>
               </h1>
 
               <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                Auth0-grade security, <span className="text-foreground font-semibold">100x cheaper</span>, passkey-first by design.
-                The authentication gateway you can actually afford.
+                Authentication shouldn't be your security liability. Avantkey is the passkey-first gateway built on Internet Computer's decentralized infrastructure—giving you Auth0-level power without the passwords, breaches, or enterprise price tag.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -166,15 +165,15 @@ export default function LandingPage() {
               <div className="flex flex-wrap items-center justify-center gap-6 pt-8">
                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
                   <Check className="w-4 h-4 text-success" />
-                  <span className="text-sm font-medium">Passkey-first</span>
+                  <span className="text-sm font-medium">Zero passwords</span>
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
                   <Check className="w-4 h-4 text-success" />
-                  <span className="text-sm font-medium">Decentralized</span>
+                  <span className="text-sm font-medium">Internet Computer backbone</span>
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
                   <Check className="w-4 h-4 text-success" />
-                  <span className="text-sm font-medium">$29/mo not $240</span>
+                  <span className="text-sm font-medium">No data breaches</span>
                 </div>
               </div>
             </div>
@@ -267,64 +266,67 @@ export default function LandingPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-              {/* Passkey-First */}
+              {/* True Password Elimination */}
               <Card className="shadow-card">
                 <CardHeader>
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                     <Key className="w-6 h-6 text-primary" />
                   </div>
                   <CardTitle className="font-display">
-                    Passkey-First Authentication
+                    True Password Elimination
                   </CardTitle>
                   <CardDescription>
-                    WebAuthn/Passkeys as the default, not an add-on. Secure,
-                    phishing-resistant authentication built-in from day one.
+                    Not password + passkey. Pure passkey authentication from day one. 
+                    No legacy credentials to manage or leak.
                   </CardDescription>
                 </CardHeader>
               </Card>
 
-              {/* Decentralized Identity */}
+              {/* Decentralized Security */}
               <Card className="shadow-card">
                 <CardHeader>
                   <div className="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center mb-4">
                     <Globe className="w-6 h-6 text-info" />
                   </div>
                   <CardTitle className="font-display">
-                    Decentralized Internet Identity
+                    Decentralized Security
                   </CardTitle>
                   <CardDescription>
-                    Powered by the Internet Computer. No passwords, no vendor
-                    lock-in, true user ownership of digital identity.
+                    Built on the Internet Computer—decentralized infrastructure that eliminates 
+                    single points of failure. Your auth system can't be taken down or breached 
+                    like centralized providers.
                   </CardDescription>
                 </CardHeader>
               </Card>
 
-              {/* Built-in RBAC */}
+              {/* Zero Password Breaches */}
               <Card className="shadow-card">
                 <CardHeader>
                   <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center mb-4">
-                    <Users className="w-6 h-6 text-success" />
+                    <Shield className="w-6 h-6 text-success" />
                   </div>
-                  <CardTitle className="font-display">Built-in RBAC</CardTitle>
+                  <CardTitle className="font-display">
+                    No Passwords to Steal
+                  </CardTitle>
                   <CardDescription>
-                    Role-based access control with Admin, Member, and Viewer
-                    roles out of the box. No extra configuration needed.
+                    No password databases. No credential leaks. No data breaches. 
+                    Passkeys use cryptographic keys that never leave the user's device.
                   </CardDescription>
                 </CardHeader>
               </Card>
 
-              {/* Webhooks */}
+              {/* Premier Authentication Gateway */}
               <Card className="shadow-card">
                 <CardHeader>
                   <div className="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center mb-4">
-                    <Webhook className="w-6 h-6 text-warning" />
+                    <Zap className="w-6 h-6 text-warning" />
                   </div>
                   <CardTitle className="font-display">
-                    Webhooks Included
+                    Auth0 Alternative for Startups
                   </CardTitle>
                   <CardDescription>
-                    Real-time authentication events delivered to your app with
-                    HMAC signatures. Track logins, registrations, and failures.
+                    Simple integration. Enterprise-grade security. 100x cheaper pricing. 
+                    Everything you need to become the premier authentication provider.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -425,10 +427,10 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-lg">
-                      Auth0 charges $240/month for similar features. We're $29.
+                      100x more affordable than Auth0
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      That's 100x more affordable for indie hackers and startups
+                      $29/month vs $240/month for 10K users. Same security. Better infrastructure.
                     </p>
                   </div>
                 </CardContent>
@@ -454,21 +456,21 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">1 webhook endpoint</span>
+                      <span className="text-sm">Decentralized ICP backbone</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
                       <span className="text-sm">
-                        Internet Identity authentication
+                        Passkey-first authentication
                       </span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">API key management</span>
+                      <span className="text-sm">RBAC + webhooks included</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">Basic analytics</span>
+                      <span className="text-sm">Same security as Enterprise</span>
                     </li>
                   </ul>
                   <Button
@@ -506,7 +508,7 @@ export default function LandingPage() {
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
                       <span className="text-sm">
-                        <strong>Unlimited</strong> webhook endpoints
+                        Decentralized infrastructure
                       </span>
                     </li>
                     <li className="flex items-start gap-2">
@@ -515,11 +517,11 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">Advanced analytics</span>
+                      <span className="text-sm">Zero downtime deployment</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">Email support</span>
+                      <span className="text-sm">Priority support</span>
                     </li>
                   </ul>
                   <Button className="w-full mt-6" onClick={handleGetStarted}>
@@ -550,6 +552,10 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
+                      <span className="text-sm">Maximum security & compliance</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
                       <span className="text-sm">Dedicated support</span>
                     </li>
                     <li className="flex items-start gap-2">
@@ -558,7 +564,7 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm">Custom integrations</span>
+                      <span className="text-sm">Custom ICP deployment</span>
                     </li>
                   </ul>
                   <Button className="w-full mt-6" variant="outline">
@@ -575,10 +581,10 @@ export default function LandingPage() {
           <div className="container mx-auto px-6">
             <div className="text-center space-y-4 mb-16">
               <h2 className="text-3xl md:text-4xl font-display font-bold">
-                How We Compare
+                Why Avantkey?
               </h2>
               <p className="text-lg text-muted-foreground">
-                Built for developers, not enterprises
+                Password elimination + decentralized security = no data breaches
               </p>
             </div>
 
@@ -593,117 +599,61 @@ export default function LandingPage() {
                             Feature
                           </th>
                           <th className="text-center p-4 font-display font-semibold bg-primary/5">
-                            PasskeyAuth
+                            Avantkey
                           </th>
                           <th className="text-center p-4 font-display font-semibold">
-                            Auth0
-                          </th>
-                          <th className="text-center p-4 font-display font-semibold">
-                            Clerk
+                            Auth0 / Clerk
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr className="border-b border-border">
-                          <td className="p-4 font-medium">Passkeys</td>
+                          <td className="p-4 font-medium">Password Strategy</td>
                           <td className="p-4 text-center bg-primary/5">
                             <div className="flex items-center justify-center gap-2">
                               <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Default</span>
+                              <span className="text-sm font-medium">Password elimination</span>
                             </div>
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
                               <AlertTriangle className="w-5 h-5 text-warning" />
-                              <span className="text-sm">Add-on</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Supported</span>
+                              <span className="text-sm">Password + optional passkeys</span>
                             </div>
                           </td>
                         </tr>
                         <tr className="border-b border-border">
-                          <td className="p-4 font-medium">Decentralized</td>
+                          <td className="p-4 font-medium">Infrastructure</td>
                           <td className="p-4 text-center bg-primary/5">
                             <div className="flex items-center justify-center gap-2">
                               <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Internet Computer</span>
+                              <span className="text-sm font-medium">Decentralized ICP</span>
                             </div>
                           </td>
                           <td className="p-4 text-center">
-                            <div className="flex items-center justify-center">
+                            <div className="flex items-center justify-center gap-2">
                               <X className="w-5 h-5 text-destructive" />
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center">
-                              <X className="w-5 h-5 text-destructive" />
+                              <span className="text-sm">Centralized (AWS/GCP)</span>
                             </div>
                           </td>
                         </tr>
                         <tr className="border-b border-border">
-                          <td className="p-4 font-medium">RBAC</td>
+                          <td className="p-4 font-medium">Data Breach Risk</td>
                           <td className="p-4 text-center bg-primary/5">
                             <div className="flex items-center justify-center gap-2">
                               <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Built-in</span>
+                              <span className="text-sm font-medium">No passwords to breach</span>
                             </div>
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
                               <AlertTriangle className="w-5 h-5 text-warning" />
-                              <span className="text-sm">Paid tier</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Built-in</span>
+                              <span className="text-sm">Password databases vulnerable</span>
                             </div>
                           </td>
                         </tr>
                         <tr className="border-b border-border">
-                          <td className="p-4 font-medium">Webhooks</td>
-                          <td className="p-4 text-center bg-primary/5">
-                            <div className="flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Included</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <AlertTriangle className="w-5 h-5 text-warning" />
-                              <span className="text-sm">Paid tier</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5 text-success" />
-                              <span className="text-sm">Included</span>
-                            </div>
-                          </td>
-                        </tr>
-                        <tr className="border-b border-border">
-                          <td className="p-4 font-medium">Starting price</td>
-                          <td className="p-4 text-center bg-primary/5">
-                            <span className="text-lg font-bold text-success">
-                              $0/mo
-                            </span>
-                          </td>
-                          <td className="p-4 text-center">
-                            <span className="text-lg font-bold">$35/mo</span>
-                          </td>
-                          <td className="p-4 text-center">
-                            <span className="text-lg font-bold text-success">
-                              $0/mo
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="p-4 font-medium">10K MAU price</td>
+                          <td className="p-4 font-medium">Pricing (10K MAU)</td>
                           <td className="p-4 text-center bg-primary/5">
                             <span className="text-lg font-bold text-success">
                               $29/mo
@@ -714,8 +664,20 @@ export default function LandingPage() {
                               $240/mo
                             </span>
                           </td>
+                        </tr>
+                        <tr>
+                          <td className="p-4 font-medium">Integration</td>
+                          <td className="p-4 text-center bg-primary/5">
+                            <div className="flex items-center justify-center gap-2">
+                              <Check className="w-5 h-5 text-success" />
+                              <span className="text-sm font-medium">5-minute setup</span>
+                            </div>
+                          </td>
                           <td className="p-4 text-center">
-                            <span className="text-lg font-bold">$25/mo</span>
+                            <div className="flex items-center justify-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-warning" />
+                              <span className="text-sm">Complex enterprise setup</span>
+                            </div>
                           </td>
                         </tr>
                       </tbody>

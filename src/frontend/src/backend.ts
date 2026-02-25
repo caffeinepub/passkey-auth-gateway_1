@@ -89,7 +89,6 @@ export class ExternalBlob {
         return this;
     }
 }
-export type TenantId = string;
 export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
@@ -103,23 +102,7 @@ export interface Tenant {
     name: string;
     createdAt: Time;
 }
-export interface TransformationInput {
-    context: Uint8Array;
-    response: http_request_result;
-}
-export interface WebhookConfig {
-    url?: string;
-    signingSecret: string;
-    enabled: boolean;
-    enabledEvents: Array<string>;
-}
 export type Day = bigint;
-export type ApiKeyHash = string;
-export interface Membership {
-    role: Role;
-    user: Principal;
-    tenantId: TenantId;
-}
 export type ApiKey = string;
 export interface http_header {
     value: string;
@@ -130,6 +113,28 @@ export interface http_request_result {
     body: Uint8Array;
     headers: Array<http_header>;
 }
+export interface RateLimitStatus {
+    resetTimestamp: Time;
+    used: bigint;
+    limit: bigint;
+}
+export type ApiKeyHash = string;
+export interface TransformationInput {
+    context: Uint8Array;
+    response: http_request_result;
+}
+export interface WebhookConfig {
+    url?: string;
+    signingSecret: string;
+    enabled: boolean;
+    enabledEvents: Array<string>;
+}
+export interface Membership {
+    role: Role;
+    user: Principal;
+    tenantId: TenantId;
+}
+export type TenantId = string;
 export enum Role {
     Viewer = "Viewer",
     Member = "Member",
@@ -156,6 +161,7 @@ export interface backendInterface {
         registered: bigint;
     }>;
     getOrCreateTenant(): Promise<Tenant>;
+    getRateLimitStatus(apiKeyHash: ApiKeyHash): Promise<RateLimitStatus>;
     getTenantMembers(): Promise<Array<Membership>>;
     getUserRole(): Promise<Role>;
     getWebhookConfig(): Promise<{
@@ -300,6 +306,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getOrCreateTenant();
+            return result;
+        }
+    }
+    async getRateLimitStatus(arg0: ApiKeyHash): Promise<RateLimitStatus> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getRateLimitStatus(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getRateLimitStatus(arg0);
             return result;
         }
     }

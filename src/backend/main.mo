@@ -1,16 +1,15 @@
 import Map "mo:core/Map";
 import List "mo:core/List";
-import Text "mo:core/Text";
 import Principal "mo:core/Principal";
+import Text "mo:core/Text";
 import Time "mo:core/Time";
-import Array "mo:core/Array";
-import Nat "mo:core/Nat";
-import Iter "mo:core/Iter";
+import Int "mo:core/Int";
 import Runtime "mo:core/Runtime";
+import Migration "migration";
 import HttpOutcall "http-outcalls/outcall";
 
+(with migration = Migration.run)
 actor {
-  // Types
   type TenantId = Text;
   type ApiKey = Text;
   type ApiKeyHash = Text;
@@ -43,7 +42,6 @@ actor {
     signingSecret : Text;
   };
 
-  // Analytics Types
   type AuthEvent = {
     eventType : Text;
     timestamp : Time.Time;
@@ -61,24 +59,32 @@ actor {
     webhookFailure : Nat;
   };
 
-  // Persistent data structures
+  public type RateLimitStatus = {
+    used : Nat;
+    limit : Nat;
+    resetTimestamp : Time.Time;
+  };
+
+  public type RateLimitBucket = {
+    count : Nat;
+    windowStart : Time.Time;
+  };
+
   let tenants = Map.empty<TenantId, Tenant>();
   let memberships = Map.empty<TenantId, List.List<Membership>>();
   let webhooks = Map.empty<TenantId, WebhookConfig>();
   let authEvents = Map.empty<TenantId, List.List<AuthEvent>>();
   let dailyAggregates = Map.empty<TenantId, Map.Map<Day, DailyAggregate>>();
-
-  // Constants
-  let retentionPeriod = 30 * 24 * 60 * 60 * 1_000_000_000; // 30 days in nanoseconds
+  let retentionPeriod = 30 * 24 * 60 * 60 * 1_000_000_000 : Nat; // 30 days in nanoseconds
+  let rateLimitBuckets = Map.empty<ApiKeyHash, RateLimitBucket>();
 
   public shared query ({ caller }) func transform(input : HttpOutcall.TransformationInput) : async HttpOutcall.TransformationOutput {
     HttpOutcall.transform(input);
   };
 
-  // Tenant Management
   func generateApiKey(tenantId : TenantId) : (ApiKey, ApiKeyHash) {
     let rawKey = "pk_" # tenantId # "_" # Time.now().toText();
-    (rawKey, rawKey); // Use raw key as hash for now (not secure)
+    (rawKey, rawKey);
   };
 
   func verifyApiKey(apiKey : ApiKey, apiKeyHash : ApiKeyHash) : Bool {
@@ -134,7 +140,7 @@ actor {
     };
   };
 
-  func requireAdminRole(tenantId : TenantId, user : Principal) : () {
+  func requireAdminRole(tenantId : TenantId, user : Principal) {
     switch (getUserRoleForTenant(tenantId, user)) {
       case (?role) {
         switch (role) {
@@ -215,7 +221,6 @@ actor {
     };
   };
 
-  // RBAC Team Functions
   func isAdmin(principal : Principal, tenantId : TenantId) : Bool {
     switch (memberships.get(tenantId)) {
       case (?members) {
@@ -234,6 +239,9 @@ actor {
       case (?t) { t };
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     if (not isAdmin(caller, tenant.id)) {
       Runtime.trap("Only admins can add members");
@@ -258,7 +266,6 @@ actor {
     memberships.add(tenant.id, existingMembers);
   };
 
-  // Role Management (New Functions)
   func findTenantByCaller(caller : Principal) : TenantId {
     switch (tenants.values().find(func(t) { t.owner == caller })) {
       case (?ten) { ten.id };
@@ -281,6 +288,13 @@ actor {
     };
 
     let tenantId = findTenantByCaller(caller);
+
+    let tenant = switch (tenants.get(tenantId)) {
+      case (?existingTenant) { existingTenant };
+      case (null) { Runtime.trap("Tenant lookup failed") };
+    };
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     if (not isAdmin(caller, tenantId)) {
       Runtime.trap("Only admins can update member roles");
@@ -310,7 +324,6 @@ actor {
       member with role = newRole;
     };
 
-    // Remove old and add new member
     let filteredList = memberList.filter(func(m) { m.user != member.user });
     filteredList.add(updatedMember);
     memberships.add(tenantId, filteredList);
@@ -322,6 +335,13 @@ actor {
     };
 
     let tenantId = findTenantByCaller(caller);
+
+    let tenant = switch (tenants.get(tenantId)) {
+      case (?existingTenant) { existingTenant };
+      case (null) { Runtime.trap("Tenant lookup failed") };
+    };
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     if (not isAdmin(caller, tenantId)) {
       Runtime.trap("Only admins can remove members");
@@ -360,7 +380,6 @@ actor {
     };
   };
 
-  // Webhook Functions
   public shared ({ caller }) func configureWebhook(url : Text, enabledEvents : [Text]) : async Text {
     if (caller.isAnonymous()) {
       Runtime.trap("Anonymous calls not allowed. Must authenticate with principal.");
@@ -370,6 +389,9 @@ actor {
       case (?t) { t };
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     requireAdminOrMemberRole(tenant.id, caller);
 
@@ -428,6 +450,9 @@ actor {
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
 
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+
     switch (webhooks.get(tenant.id)) {
       case (?config) {
         let updatedConfig = { config with enabled };
@@ -450,6 +475,9 @@ actor {
       case (?t) { t };
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     requireAdminOrMemberRole(tenant.id, caller);
 
@@ -477,7 +505,6 @@ actor {
     webhooks.values().toArray();
   };
 
-  // Analytics & Events
   func getCurrentDay() : Day {
     let now = Time.now();
     let dayMillis = 24 * 60 * 60 * 1_000_000_000;
@@ -565,6 +592,28 @@ actor {
     cleanupOldData(tenantId);
   };
 
+  func checkAndIncrementRateLimit(apiKeyHash : Text) : Bool {
+    let now = Time.now();
+    switch (rateLimitBuckets.get(apiKeyHash)) {
+      case (null) {
+        let newBucket = { count = 1; windowStart = now };
+        rateLimitBuckets.add(apiKeyHash, newBucket);
+        true;
+      };
+      case (?bucket) {
+        if (now >= (bucket.windowStart + 3600_000_000_000)) {
+          let resetBucket = { count = 1; windowStart = now };
+          rateLimitBuckets.add(apiKeyHash, resetBucket);
+          true;
+        } else if (bucket.count < 1000) {
+          let updatedBucket = { bucket with count = bucket.count + 1 };
+          rateLimitBuckets.add(apiKeyHash, updatedBucket);
+          true;
+        } else { false };
+      };
+    };
+  };
+
   public shared ({ caller }) func getAnalyticsSummary(tenantId : TenantId, days : Nat) : async {
     totalApiCalls : Nat;
     activeEndUsers : Nat;
@@ -578,6 +627,14 @@ actor {
       Runtime.trap("Tenant not found");
     };
 
+    let tenant = switch (tenants.get(tenantId)) {
+      case (?t) { t };
+      case (null) { Runtime.trap("Tenant not found") };
+    };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+
     let currentDay = getCurrentDay();
     var totalCalls = 0;
     var successCount = 0;
@@ -589,8 +646,10 @@ actor {
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
 
+    let lowerBound = if (days >= currentDay) { 0 } else { currentDay - days };
+
     for ((day, agg) in aggregates.entries()) {
-      if (day >= currentDay - days and day <= currentDay) {
+      if (day >= lowerBound and day <= currentDay) {
         totalCalls += agg.apiCalls;
         successCount += agg.successRate;
         webhookSuccess += agg.webhookSuccess;
@@ -623,6 +682,14 @@ actor {
       Runtime.trap("Tenant not found");
     };
 
+    let tenant = switch (tenants.get(tenantId)) {
+      case (?t) { t };
+      case (null) { Runtime.trap("Tenant not found") };
+    };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+
     let currentDay = getCurrentDay();
     var trend = List.empty<(Day, Nat)>();
 
@@ -631,8 +698,10 @@ actor {
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
 
+    let lowerBound = if (days >= currentDay) { 0 } else { currentDay - days };
+
     for ((day, agg) in aggregates.entries()) {
-      if (day >= currentDay - days and day <= currentDay) {
+      if (day >= lowerBound and day <= currentDay) {
         trend.add((day, agg.apiCalls));
       };
     };
@@ -648,6 +717,14 @@ actor {
     if (not tenants.containsKey(tenantId)) {
       Runtime.trap("Tenant not found");
     };
+
+    let tenant = switch (tenants.get(tenantId)) {
+      case (?t) { t };
+      case (null) { Runtime.trap("Tenant not found") };
+    };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded") };
 
     let events = switch (authEvents.get(tenantId)) {
       case (?evts) { evts };
@@ -685,7 +762,7 @@ actor {
     };
     let filteredEvents = events.filter(
       func(event) {
-        event.timestamp >= (Time.now() - retentionPeriod);
+        event.timestamp >= (Time.now() - retentionPeriod : Int);
       }
     );
     authEvents.add(tenantId, filteredEvents);
@@ -694,11 +771,38 @@ actor {
       case (?aggs) { aggs };
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
+
+    let thirtyDaysAgo = if (currentDay >= 30) { currentDay - 30 } else { 0 };
     let filteredAggregates = aggregates.filter(
       func(day, agg) {
-        day >= currentDay - 30;
+        day >= thirtyDaysAgo;
       }
     );
     dailyAggregates.add(tenantId, filteredAggregates);
+  };
+
+  public shared query ({ caller }) func getRateLimitStatus(apiKeyHash : ApiKeyHash) : async RateLimitStatus {
+    let now = Time.now();
+    let (currentCount, windowStart) = switch (rateLimitBuckets.get(apiKeyHash)) {
+      case (?bucket) {
+        if (now >= (bucket.windowStart + 3600_000_000_000)) {
+          (0, now);
+        } else { (bucket.count, bucket.windowStart) };
+      };
+      case (null) { (0, now) };
+    };
+
+    let plan = "free";
+    let limit = switch (plan) {
+      case ("pro") { 10_000 };
+      case ("enterprise") { 100_000 };
+      case (_) { 1_000 };
+    };
+
+    {
+      used = currentCount;
+      limit;
+      resetTimestamp = windowStart + 3600_000_000_000;
+    };
   };
 };

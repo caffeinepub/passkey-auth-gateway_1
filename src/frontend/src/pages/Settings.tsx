@@ -56,6 +56,8 @@ import { Role } from "../backend";
 import { Principal } from "@dfinity/principal";
 import { useActor } from "../hooks/useActor";
 import { useQueryClient } from "@tanstack/react-query";
+import { getToastErrorMessage } from "../lib/errorMessages";
+import { InlineError } from "../components/InlineError";
 
 /**
  * Truncate a principal for display
@@ -181,22 +183,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["tenantMembers"] });
     } catch (error) {
       console.error("Failed to add member:", error);
-      
-      // Extract error message from the error object
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : String(error);
-      
-      // Show more specific error messages
-      if (errorMessage.includes("already exists")) {
-        toast.error("This member is already in your team");
-      } else if (errorMessage.includes("Only admins")) {
-        toast.error("Only admins can add team members");
-      } else if (errorMessage.includes("Permission denied")) {
-        toast.error("You don't have permission to add members");
-      } else {
-        toast.error("Failed to add team member");
-      }
+      toast.error(getToastErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -221,23 +208,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["tenantMembers"] });
     } catch (error) {
       console.error("Failed to update role:", error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : String(error);
-      
-      // Show more specific error messages
-      if (errorMessage.includes("Only admins")) {
-        toast.error("Only admins can change roles");
-      } else if (errorMessage.includes("Cannot change your own role")) {
-        toast.error("You cannot change your own role");
-      } else if (errorMessage.includes("Cannot remove last admin")) {
-        toast.error("Cannot demote the last admin");
-      } else if (errorMessage.includes("Member not found")) {
-        toast.error("Team member not found");
-      } else {
-        toast.error("Failed to update role");
-      }
+      toast.error(getToastErrorMessage(error));
     } finally {
       setUpdatingRole(null);
     }
@@ -262,23 +233,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["tenantMembers"] });
     } catch (error) {
       console.error("Failed to remove member:", error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : String(error);
-      
-      // Show more specific error messages
-      if (errorMessage.includes("Only admins")) {
-        toast.error("Only admins can remove members");
-      } else if (errorMessage.includes("Cannot remove yourself")) {
-        toast.error("You cannot remove yourself");
-      } else if (errorMessage.includes("Cannot remove last admin")) {
-        toast.error("Cannot remove the last admin");
-      } else if (errorMessage.includes("Member not found")) {
-        toast.error("Team member not found");
-      } else {
-        toast.error("Failed to remove team member");
-      }
+      toast.error(getToastErrorMessage(error));
     } finally {
       setRemovingMember(null);
     }
@@ -329,7 +284,7 @@ export default function Settings() {
             <CardContent className="space-y-4">
               {/* Principal ID */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Your Principal ID</label>
+                <Label>Your Principal ID</Label>
                 <div className="flex items-center gap-2">
                   <TooltipProvider>
                     <Tooltip>
@@ -362,7 +317,7 @@ export default function Settings() {
 
               {/* Current Role */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Your Role</label>
+                <Label>Your Role</Label>
                 {currentUserMembership ? (
                   (() => {
                     const config = getRoleBadgeConfig(currentUserMembership.role);
@@ -414,12 +369,7 @@ export default function Settings() {
                       disabled={isSubmitting}
                       className={principalError ? "border-destructive" : ""}
                     />
-                    {principalError && (
-                      <p className="text-sm text-destructive flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {principalError}
-                      </p>
-                    )}
+                    {principalError && <InlineError message={principalError} />}
                     <p className="text-xs text-muted-foreground">
                       The user must share their Principal ID with you (found in their Account settings)
                     </p>

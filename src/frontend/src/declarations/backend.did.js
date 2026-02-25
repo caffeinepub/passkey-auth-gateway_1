@@ -25,6 +25,11 @@ export const Tenant = IDL.Record({
   'createdAt' : Time,
 });
 export const Day = IDL.Nat;
+export const RateLimitStatus = IDL.Record({
+  'resetTimestamp' : Time,
+  'used' : IDL.Nat,
+  'limit' : IDL.Nat,
+});
 export const Membership = IDL.Record({
   'role' : Role,
   'user' : IDL.Principal,
@@ -92,6 +97,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'getOrCreateTenant' : IDL.Func([], [Tenant], []),
+  'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
   'getTenantMembers' : IDL.Func([], [IDL.Vec(Membership)], []),
   'getUserRole' : IDL.Func([], [Role], []),
   'getWebhookConfig' : IDL.Func(
@@ -148,6 +154,11 @@ export const idlFactory = ({ IDL }) => {
     'createdAt' : Time,
   });
   const Day = IDL.Nat;
+  const RateLimitStatus = IDL.Record({
+    'resetTimestamp' : Time,
+    'used' : IDL.Nat,
+    'limit' : IDL.Nat,
+  });
   const Membership = IDL.Record({
     'role' : Role,
     'user' : IDL.Principal,
@@ -216,6 +227,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getOrCreateTenant' : IDL.Func([], [Tenant], []),
+    'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
     'getTenantMembers' : IDL.Func([], [IDL.Vec(Membership)], []),
     'getUserRole' : IDL.Func([], [Role], []),
     'getWebhookConfig' : IDL.Func(

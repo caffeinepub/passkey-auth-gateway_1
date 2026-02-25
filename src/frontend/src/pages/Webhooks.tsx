@@ -40,6 +40,9 @@ import { useActor } from "../hooks/useActor";
 import { useGetWebhookConfig, useGetWebhookDeliveries, useGetUserRole } from "../hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getUserFriendlyError, getToastErrorMessage } from "../lib/errorMessages";
+import { ErrorCard } from "../components/ErrorCard";
+import { InlineError } from "../components/InlineError";
 
 // Event type definitions
 const EVENT_TYPES = [
@@ -101,6 +104,7 @@ export default function Webhooks() {
     data: webhookConfig,
     isLoading: configLoading,
     error: configError,
+    refetch: refetchConfig,
   } = useGetWebhookConfig();
   
   const {
@@ -146,6 +150,12 @@ export default function Webhooks() {
     }
     if (!url.startsWith("https://")) {
       setUrlError("Webhook URL must start with https://");
+      return false;
+    }
+    try {
+      new URL(url);
+    } catch {
+      setUrlError("Invalid URL format");
       return false;
     }
     setUrlError(null);
@@ -197,7 +207,7 @@ export default function Webhooks() {
       toast.success("Webhook configured successfully");
     } catch (err) {
       console.error("Failed to configure webhook:", err);
-      toast.error("Failed to configure webhook. Please try again.");
+      toast.error(getToastErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
@@ -218,7 +228,7 @@ export default function Webhooks() {
       toast.success(`Webhook ${enabled ? "enabled" : "disabled"}`);
     } catch (err) {
       console.error("Failed to update webhook status:", err);
-      toast.error("Failed to update webhook status. Please try again.");
+      toast.error(getToastErrorMessage(err));
     } finally {
       setIsTogglingStatus(false);
     }
@@ -229,13 +239,14 @@ export default function Webhooks() {
     if (!actor) return;
     
     setIsTesting(true);
+    const toastId = toast.loading("Sending test webhook...");
     try {
       const result = await actor.testWebhook();
       
       if (result.status >= 200 && result.status < 300) {
-        toast.success(`Test webhook sent successfully (${result.status})`);
+        toast.success(`Test webhook delivered successfully (${result.status})`, { id: toastId });
       } else {
-        toast.error(`Test webhook failed (${result.status}): ${result.message}`);
+        toast.error(`Test webhook failed (${result.status}): ${result.message}`, { id: toastId });
       }
       
       // Refetch deliveries to show the test
@@ -244,7 +255,7 @@ export default function Webhooks() {
       }, 1000);
     } catch (err) {
       console.error("Failed to test webhook:", err);
-      toast.error("Failed to send test webhook. Please try again.");
+      toast.error(getToastErrorMessage(err), { id: toastId });
     } finally {
       setIsTesting(false);
     }
@@ -299,23 +310,17 @@ export default function Webhooks() {
       )}
 
       {/* Error State */}
-      {configError && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-              <CardTitle className="text-destructive">Error</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {configError instanceof Error
-                ? configError.message
-                : "Failed to load webhook configuration"}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {configError && (() => {
+        const friendlyError = getUserFriendlyError(configError);
+        return (
+          <ErrorCard
+            title={friendlyError.title}
+            message={friendlyError.message}
+            canRetry={friendlyError.canRetry}
+            onRetry={friendlyError.canRetry ? refetchConfig : undefined}
+          />
+        );
+      })()}
 
       {/* Webhook Configuration Card */}
       {!configLoading && (
@@ -360,12 +365,7 @@ export default function Webhooks() {
                     }}
                     className={urlError ? "border-destructive" : ""}
                   />
-                  {urlError && (
-                    <p className="text-xs text-destructive flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {urlError}
-                    </p>
-                  )}
+                  {urlError && <InlineError message={urlError} />}
                 </div>
 
                 {/* Signing Secret (if configured) */}
@@ -384,12 +384,7 @@ export default function Webhooks() {
                 {/* Event Types */}
                 <div className="space-y-3">
                   <Label>Event Types</Label>
-                  {eventsError && (
-                    <p className="text-xs text-destructive flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {eventsError}
-                    </p>
-                  )}
+                  {eventsError && <InlineError message={eventsError} />}
                   <div className="space-y-3">
                     {EVENT_TYPES.map((event) => (
                       <div key={event.id} className="flex items-start space-x-3">

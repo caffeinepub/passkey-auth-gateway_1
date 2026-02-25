@@ -18,6 +18,11 @@ export interface Membership {
   'user' : Principal,
   'tenantId' : TenantId,
 }
+export interface RateLimitStatus {
+  'resetTimestamp' : Time,
+  'used' : bigint,
+  'limit' : bigint,
+}
 export type Role = { 'Viewer' : null } |
   { 'Member' : null } |
   { 'Admin' : null };
@@ -71,6 +76,7 @@ export interface _SERVICE {
     { 'authenticated' : bigint, 'failed' : bigint, 'registered' : bigint }
   >,
   'getOrCreateTenant' : ActorMethod<[], Tenant>,
+  'getRateLimitStatus' : ActorMethod<[ApiKeyHash], RateLimitStatus>,
   'getTenantMembers' : ActorMethod<[], Array<Membership>>,
   'getUserRole' : ActorMethod<[], Role>,
   'getWebhookConfig' : ActorMethod<

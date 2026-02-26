@@ -8,9 +8,9 @@ import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
 import Nat "mo:core/Nat";
 import HttpOutcall "http-outcalls/outcall";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   // Types and State
   type TenantId = Text;

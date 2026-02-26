@@ -105,7 +105,199 @@ const TOC: TocEntry[] = [
   },
 ];
 
-// ─── Code block helper ────────────────────────────────────────────────────────
+// ─── Syntax Tokenizer ─────────────────────────────────────────────────────────
+
+const KEYWORDS = new Set([
+  "import", "export", "from", "const", "let", "var", "await", "async",
+  "function", "return", "if", "else", "new", "true", "false", "null",
+  "undefined", "public", "shared", "func", "type", "class", "for", "of", "in",
+]);
+
+const MOTOKO_TYPES = new Set([
+  "Text", "Bool", "Int", "Nat", "Principal", "Blob", "Char",
+]);
+
+interface Token {
+  text: string;
+  color: string;
+  italic?: boolean;
+}
+
+function tokenizeLine(line: string, language: string): Token[] {
+  // Plain text fallback
+  if (!["javascript", "js", "typescript", "ts", "motoko", "json", "bash", "env", "http", "text"].includes(language)) {
+    return [{ text: line, color: "#ABB2BF" }];
+  }
+
+  const tokens: Token[] = [];
+  let remaining = line;
+
+  // JSON: highlight keys vs values differently
+  if (language === "json") {
+    // Handle indentation + content
+    const indentMatch = remaining.match(/^(\s*)(.*)/);
+    const indent = indentMatch?.[1] ?? "";
+    const content = indentMatch?.[2] ?? remaining;
+    if (indent) tokens.push({ text: indent, color: "#ABB2BF" });
+    remaining = content;
+
+    // JSON key: "key":
+    const keyMatch = remaining.match(/^("(?:[^"\\]|\\.)*")(\s*:)(.*)/);
+    if (keyMatch) {
+      tokens.push({ text: keyMatch[1], color: "#E06C75" });
+      tokens.push({ text: keyMatch[2], color: "#ABB2BF" });
+      remaining = keyMatch[3];
+      // Fall through to tokenize value
+    }
+    // Now tokenize remaining as value
+    const jsonValueTokens = tokenizeValue(remaining);
+    tokens.push(...jsonValueTokens);
+    return tokens;
+  }
+
+  // Line-level comment
+  const lineCommentIdx = findLineComment(remaining);
+  const codePart = lineCommentIdx >= 0 ? remaining.slice(0, lineCommentIdx) : remaining;
+  const commentPart = lineCommentIdx >= 0 ? remaining.slice(lineCommentIdx) : null;
+
+  tokenizeCode(codePart, language, tokens);
+
+  if (commentPart !== null) {
+    tokens.push({ text: commentPart, color: "#5C6370", italic: true });
+  }
+
+  return tokens;
+}
+
+function findLineComment(code: string): number {
+  // Find // that isn't inside a string
+  let inString = false;
+  let stringChar = "";
+  let i = 0;
+  while (i < code.length) {
+    const ch = code[i];
+    if (!inString && (ch === '"' || ch === "'" || ch === "`")) {
+      inString = true;
+      stringChar = ch;
+    } else if (inString && ch === stringChar && code[i - 1] !== "\\") {
+      inString = false;
+    } else if (!inString && ch === "/" && code[i + 1] === "/") {
+      return i;
+    }
+    i++;
+  }
+  return -1;
+}
+
+function tokenizeValue(text: string): Token[] {
+  const tokens: Token[] = [];
+  tokenizeCode(text, "json-value", tokens);
+  return tokens;
+}
+
+function tokenizeCode(code: string, language: string, out: Token[]) {
+  let i = 0;
+
+  while (i < code.length) {
+    // Whitespace
+    if (/\s/.test(code[i])) {
+      let j = i;
+      while (j < code.length && /\s/.test(code[j])) j++;
+      out.push({ text: code.slice(i, j), color: "#ABB2BF" });
+      i = j;
+      continue;
+    }
+
+    // String literals (single, double, backtick)
+    if (code[i] === '"' || code[i] === "'" || code[i] === "`") {
+      const quote = code[i];
+      let j = i + 1;
+      while (j < code.length) {
+        if (code[j] === "\\" && j + 1 < code.length) {
+          j += 2;
+        } else if (code[j] === quote) {
+          j++;
+          break;
+        } else {
+          j++;
+        }
+      }
+      // JSON value strings → green; JSON keys handled separately
+      out.push({ text: code.slice(i, j), color: "#98C379" });
+      i = j;
+      continue;
+    }
+
+    // Numbers
+    if (/[0-9]/.test(code[i]) || (code[i] === "-" && /[0-9]/.test(code[i + 1] ?? ""))) {
+      let j = i;
+      if (code[j] === "-") j++;
+      while (j < code.length && /[0-9._nxXa-fA-F]/.test(code[j])) j++;
+      out.push({ text: code.slice(i, j), color: "#D19A66" });
+      i = j;
+      continue;
+    }
+
+    // Identifiers (keywords, types, function calls)
+    if (/[a-zA-Z_$]/.test(code[i])) {
+      let j = i;
+      while (j < code.length && /[a-zA-Z0-9_$]/.test(code[j])) j++;
+      const word = code.slice(i, j);
+
+      // Check what follows (ignoring whitespace)
+      let k = j;
+      while (k < code.length && code[k] === " ") k++;
+      const isCall = code[k] === "(";
+
+      let color = "#ABB2BF";
+      if (KEYWORDS.has(word)) {
+        color = "#C678DD";
+      } else if (language === "motoko" && MOTOKO_TYPES.has(word)) {
+        color = "#E5C07B";
+      } else if (isCall) {
+        color = "#61AFEF";
+      }
+
+      out.push({ text: word, color });
+      i = j;
+      continue;
+    }
+
+    // Punctuation / operators — single char passthrough
+    out.push({ text: code[i], color: "#ABB2BF" });
+    i++;
+  }
+}
+
+function tokenize(code: string, language: string): React.ReactNode {
+  const lines = code.split("\n");
+  const result: React.ReactNode[] = [];
+
+  for (let li = 0; li < lines.length; li++) {
+    const lineTokens = tokenizeLine(lines[li], language);
+    for (let ti = 0; ti < lineTokens.length; ti++) {
+      const tok = lineTokens[ti];
+      result.push(
+        <span
+          key={`${li}-${ti}`}
+          style={{
+            color: tok.color,
+            fontStyle: tok.italic ? "italic" : undefined,
+          }}
+        >
+          {tok.text}
+        </span>
+      );
+    }
+    if (li < lines.length - 1) {
+      result.push("\n");
+    }
+  }
+
+  return result;
+}
+
+// ─── macOS Code Block ─────────────────────────────────────────────────────────
 
 function CodeBlock({
   code,
@@ -123,28 +315,59 @@ function CodeBlock({
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
+  const highlighted = tokenize(code.trim(), language);
+
   return (
-    <div className="relative group rounded-lg overflow-hidden border border-border bg-[oklch(0.13_0.02_240)]">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-[oklch(0.16_0.02_240)]">
-        <span className="text-xs font-mono text-muted-foreground tracking-wide uppercase">
+    <div className="rounded-xl overflow-hidden border border-[oklch(0.25_0.02_240)] shadow-xl shadow-black/30">
+      {/* macOS title bar */}
+      <div className="flex items-center px-4 py-3 bg-[oklch(0.20_0.02_240)]">
+        {/* Traffic lights */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="w-3 h-3 rounded-full inline-block"
+            style={{ backgroundColor: "#FF5F57" }}
+          />
+          <span
+            className="w-3 h-3 rounded-full inline-block"
+            style={{ backgroundColor: "#FEBC2E" }}
+          />
+          <span
+            className="w-3 h-3 rounded-full inline-block"
+            style={{ backgroundColor: "#28C840" }}
+          />
+        </div>
+
+        {/* Language label */}
+        <span className="flex-1 text-center text-xs font-mono text-muted-foreground/60">
           {language}
         </span>
+
+        {/* Copy button */}
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors shrink-0"
         >
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-success" />
+            <>
+              <Check className="w-3.5 h-3.5 text-green-400" />
+              <span className="text-green-400">Copied</span>
+            </>
           ) : (
-            <Copy className="w-3.5 h-3.5" />
+            <>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </>
           )}
-          {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto p-4 text-sm font-mono leading-relaxed">
-        <code className="text-foreground/90">{code.trim()}</code>
-      </pre>
+
+      {/* Code area */}
+      <div className="bg-[oklch(0.12_0.015_240)] p-5 overflow-x-auto text-sm font-mono leading-relaxed">
+        <pre className="p-0 m-0 bg-transparent">
+          <code style={{ color: "#ABB2BF" }}>{highlighted}</code>
+        </pre>
+      </div>
     </div>
   );
 }

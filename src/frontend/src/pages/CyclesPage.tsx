@@ -16,10 +16,44 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useGetCycleStats, useGetUserRole } from "../hooks/useQueries";
-import { Loader2, AlertCircle, Gauge, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  Gauge,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle,
+  Copy,
+  Check,
+  Zap,
+  ClipboardList,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getUserFriendlyError } from "../lib/errorMessages";
 import { ErrorCard } from "../components/ErrorCard";
+
+const CANISTER_ID = "lep6p-paaaa-aaaai-q5v4q-cai";
+
+const TOP_UP_OPTIONS = [
+  {
+    label: "5T cycles",
+    amount: "5_000_000_000_000",
+    usd: "~$6.50 USD",
+    note: "good for early beta",
+  },
+  {
+    label: "10T cycles",
+    amount: "10_000_000_000_000",
+    usd: "~$13.00 USD",
+    note: "recommended buffer",
+  },
+  {
+    label: "20T cycles",
+    amount: "20_000_000_000_000",
+    usd: "~$26.00 USD",
+    note: "comfortable runway for launch",
+  },
+];
 
 /**
  * Format cycle count to human-readable string with trillion suffix
@@ -29,7 +63,7 @@ function formatCycles(cycles: bigint): string {
   const trillion = 1_000_000_000_000;
   const cyclesNum = Number(cycles);
   const trillions = cyclesNum / trillion;
-  
+
   if (trillions >= 1000) {
     return `${(trillions / 1000).toFixed(2)} Q`; // Quadrillion
   } else if (trillions >= 1) {
@@ -107,6 +141,58 @@ function getProgressPercentage(balance: bigint): number {
 }
 
 /**
+ * Small inline copy button that shows a checkmark briefly after copying
+ */
+function CopyButton({
+  text,
+  title = "Copy",
+  variant = "ghost",
+  size = "sm",
+}: {
+  text: string;
+  title?: string;
+  variant?: "ghost" | "outline";
+  size?: "sm" | "icon";
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard not available
+    }
+  };
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={variant}
+            size={size}
+            onClick={handleCopy}
+            className="h-7 w-7 p-0 shrink-0"
+            aria-label={title}
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-success" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <p className="text-xs">{copied ? "Copied!" : title}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
  * Cycles Monitoring Dashboard Page
  * Admin-only page for monitoring canister cycle balance
  */
@@ -119,6 +205,7 @@ export default function CyclesPage() {
     refetch,
   } = useGetCycleStats();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [canisterIdCopied, setCanisterIdCopied] = useState(false);
   const queryClient = useQueryClient();
 
   const isLoading = roleLoading || statsLoading;
@@ -128,7 +215,9 @@ export default function CyclesPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-display font-semibold">Cycle Monitoring</h2>
+          <h2 className="text-2xl font-display font-semibold">
+            Cycle Monitoring
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">
             Track your canister's cycle balance and health
           </p>
@@ -158,6 +247,16 @@ export default function CyclesPage() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
+  const handleCopyCanisterId = async () => {
+    try {
+      await navigator.clipboard.writeText(CANISTER_ID);
+      setCanisterIdCopied(true);
+      setTimeout(() => setCanisterIdCopied(false), 1500);
+    } catch {
+      // clipboard not available
+    }
+  };
+
   const statusLevel = cycleStats
     ? getStatusLevel(cycleStats.currentBalance)
     : "healthy";
@@ -171,11 +270,44 @@ export default function CyclesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-display font-semibold">Cycle Monitoring</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-display font-semibold">
+            Cycle Monitoring
+          </h2>
+          <p className="text-sm text-muted-foreground">
             Track your canister's cycle balance and health
           </p>
+          {/* Canister ID badge */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span className="text-xs text-muted-foreground">Canister:</span>
+            <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
+              {CANISTER_ID}
+            </code>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopyCanisterId}
+                    className="h-6 w-6 p-0"
+                    aria-label="Copy canister ID"
+                  >
+                    {canisterIdCopied ? (
+                      <Check className="w-3 h-3 text-success" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p className="text-xs">
+                    {canisterIdCopied ? "Copied!" : "Copy canister ID"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
         <Button
           variant="outline"
@@ -184,7 +316,9 @@ export default function CyclesPage() {
           disabled={isRefreshing || isLoading}
           className="gap-2"
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       </div>
@@ -194,23 +328,26 @@ export default function CyclesPage() {
         <div className="flex items-center justify-center py-16">
           <div className="text-center space-y-4">
             <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-            <p className="text-sm text-muted-foreground">Loading cycle data...</p>
+            <p className="text-sm text-muted-foreground">
+              Loading cycle data...
+            </p>
           </div>
         </div>
       )}
 
       {/* Error State */}
-      {statsError && (() => {
-        const friendlyError = getUserFriendlyError(statsError);
-        return (
-          <ErrorCard
-            title={friendlyError.title}
-            message={friendlyError.message}
-            canRetry={friendlyError.canRetry}
-            onRetry={friendlyError.canRetry ? refetch : undefined}
-          />
-        );
-      })()}
+      {statsError &&
+        (() => {
+          const friendlyError = getUserFriendlyError(statsError);
+          return (
+            <ErrorCard
+              title={friendlyError.title}
+              message={friendlyError.message}
+              canRetry={friendlyError.canRetry}
+              onRetry={friendlyError.canRetry ? refetch : undefined}
+            />
+          );
+        })()}
 
       {/* Cycle Balance Hero Card */}
       {cycleStats && !isLoading && (
@@ -223,7 +360,9 @@ export default function CyclesPage() {
                     <Gauge className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="font-display">Current Cycle Balance</CardTitle>
+                    <CardTitle className="font-display">
+                      Current Cycle Balance
+                    </CardTitle>
                     <CardDescription>
                       Last updated: {formatTimestamp(cycleStats.lastChecked)}
                     </CardDescription>
@@ -245,7 +384,9 @@ export default function CyclesPage() {
                         <p className="text-5xl font-bold font-display">
                           {formatCycles(cycleStats.currentBalance)}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">cycles</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          cycles
+                        </p>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="right">
@@ -273,8 +414,8 @@ export default function CyclesPage() {
                     statusLevel === "healthy"
                       ? "bg-muted"
                       : statusLevel === "warning"
-                      ? "bg-warning/20"
-                      : "bg-destructive/20"
+                        ? "bg-warning/20"
+                        : "bg-destructive/20"
                   }`}
                 />
               </div>
@@ -303,8 +444,8 @@ export default function CyclesPage() {
                       Warning: Cycle balance is low
                     </p>
                     <p className="text-xs text-warning-foreground/80">
-                      Consider topping up your canister cycles to maintain service
-                      availability.
+                      Consider topping up your canister cycles to maintain
+                      service availability.
                     </p>
                   </div>
                 </div>
@@ -318,8 +459,8 @@ export default function CyclesPage() {
                       Healthy: Cycle balance is good
                     </p>
                     <p className="text-xs text-success-foreground/80">
-                      Your canister has sufficient cycles for normal operation. Auto-refresh
-                      is enabled every 30 seconds.
+                      Your canister has sufficient cycles for normal operation.
+                      Auto-refresh is enabled every 30 seconds.
                     </p>
                   </div>
                 </div>
@@ -327,17 +468,19 @@ export default function CyclesPage() {
             </CardContent>
           </Card>
 
-          {/* Information Cards */}
+          {/* Information Cards — 2-col grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* About Cycles */}
+            {/* Row 1 — About Cycles */}
             <Card className="shadow-card">
               <CardHeader>
-                <CardTitle className="font-display text-lg">About Cycles</CardTitle>
+                <CardTitle className="font-display text-lg">
+                  About Cycles
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground">
-                  Cycles are the computational currency of the Internet Computer. They
-                  power every operation your canister performs.
+                  Cycles are the computational currency of the Internet
+                  Computer. They power every operation your canister performs.
                 </p>
                 <div className="space-y-2 pt-2">
                   <div className="flex items-start gap-2">
@@ -355,43 +498,174 @@ export default function CyclesPage() {
                   <div className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
                     <p>
-                      <strong>Auto-refresh:</strong> Data updates every 30 seconds
+                      <strong>Auto-refresh:</strong> Data updates every 30
+                      seconds
                     </p>
+                  </div>
+                </div>
+
+                {/* Avantkey operation costs */}
+                <div className="pt-3 border-t border-border">
+                  <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                    Avantkey Operation Costs
+                  </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        API verify / authenticate
+                      </span>
+                      <code className="bg-muted px-1.5 py-0.5 rounded font-mono">
+                        ~0.001T
+                      </code>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        Webhook delivery (HTTP outcall)
+                      </span>
+                      <code className="bg-muted px-1.5 py-0.5 rounded font-mono">
+                        ~0.4T
+                      </code>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        Data storage (per KB/day)
+                      </span>
+                      <code className="bg-muted px-1.5 py-0.5 rounded font-mono">
+                        ~0.001T
+                      </code>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* How to Top Up */}
+            {/* Row 1 — How to Top Up */}
             <Card className="shadow-card">
               <CardHeader>
-                <CardTitle className="font-display text-lg">How to Top Up</CardTitle>
+                <CardTitle className="font-display text-lg">
+                  How to Top Up
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground">
-                  To add cycles to your canister, use the dfx command-line tool or the
-                  NNS dashboard.
+                  To add cycles to your canister, use the dfx command-line tool
+                  or the NNS dashboard.
                 </p>
                 <div className="space-y-3 pt-2">
                   <div>
                     <p className="font-medium mb-1">Via dfx (recommended):</p>
-                    <code className="text-xs bg-muted px-2 py-1 rounded block overflow-x-auto">
-                      dfx canister deposit-cycles [AMOUNT] [CANISTER-ID]
-                    </code>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs bg-muted px-2 py-1.5 rounded flex-1 overflow-x-auto whitespace-nowrap">
+                        dfx canister deposit-cycles [AMOUNT]{" "}
+                        {CANISTER_ID}
+                      </code>
+                      <CopyButton
+                        text={`dfx canister deposit-cycles [AMOUNT] ${CANISTER_ID}`}
+                        title="Copy dfx command"
+                      />
+                    </div>
                   </div>
                   <div>
                     <p className="font-medium mb-1">Via NNS Dashboard:</p>
                     <p className="text-muted-foreground">
                       Visit{" "}
                       <a
-                        href="https://nns.ic0.app"
+                        href={`https://nns.ic0.app/canister/?canister=${CANISTER_ID}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline"
+                        className="text-primary hover:underline break-all"
                       >
-                        nns.ic0.app
+                        nns.ic0.app/canister/?canister={CANISTER_ID}
                       </a>{" "}
-                      and navigate to your canister.
+                      to manage cycles directly.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Row 2 — Top-Up Guide */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-primary" />
+                  <CardTitle className="font-display text-lg">
+                    Recommended Top-Up Amounts
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="space-y-2">
+                  {TOP_UP_OPTIONS.map((option) => {
+                    const cmd = `dfx canister deposit-cycles ${option.amount} ${CANISTER_ID}`;
+                    return (
+                      <div
+                        key={option.amount}
+                        className="flex items-start gap-3 p-3 rounded-md border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm">
+                              {option.label}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {option.usd}
+                            </span>
+                            <span className="text-xs text-muted-foreground italic">
+                              — {option.note}
+                            </span>
+                          </div>
+                          <code className="text-xs font-mono text-muted-foreground break-all">
+                            {cmd}
+                          </code>
+                        </div>
+                        <CopyButton text={cmd} title="Copy dfx command" />
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground pt-1 border-t border-border">
+                  1 Trillion cycles ≈ $1.30 USD at current ICP rates
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Row 2 — Production Routine */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-primary" />
+                  <CardTitle className="font-display text-lg">
+                    Weekly Top-Up Checklist
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <ol className="space-y-2.5">
+                  {[
+                    { id: "check-balance", text: "Check cycle balance in this dashboard" },
+                    { id: "critical-topup", text: "If balance < 5T, top up immediately" },
+                    { id: "warning-topup", text: "If balance < 10T, schedule top-up within 48 hours" },
+                    { id: "beta-check", text: "After beta launch: check daily until traffic patterns stabilize" },
+                  ].map((item, i) => (
+                    <li key={item.id} className="flex items-start gap-3">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-[10px] font-bold text-primary mt-0.5">
+                        {i + 1}
+                      </div>
+                      <span className="text-muted-foreground">{item.text}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="pt-3 border-t border-border">
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/20">
+                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Each webhook delivery costs ~0.4T cycles. At 100
+                      webhooks/day, plan for{" "}
+                      <strong className="text-foreground">
+                        ~40T cycles/day
+                      </strong>{" "}
+                      in webhook costs.
                     </p>
                   </div>
                 </div>

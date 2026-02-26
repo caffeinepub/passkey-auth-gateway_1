@@ -7,6 +7,7 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
+export type TenantId = string;
 export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
@@ -20,7 +21,21 @@ export interface Tenant {
     name: string;
     createdAt: Time;
 }
+export interface AuditLogEntry {
+    id: string;
+    userId: string;
+    tenantId: TenantId;
+    timestamp: Time;
+    callerPrincipal: string;
+    success: boolean;
+    eventType: string;
+}
 export type Day = bigint;
+export interface ValidateSessionResult {
+    expiresAt: Time;
+    valid: boolean;
+    userId: string;
+}
 export type ApiKey = string;
 export interface http_header {
     value: string;
@@ -30,6 +45,14 @@ export interface http_request_result {
     status: bigint;
     body: Uint8Array;
     headers: Array<http_header>;
+}
+export interface Session {
+    principal: Principal;
+    expiresAt: Time;
+    userId: string;
+    createdAt: Time;
+    tenantId: TenantId;
+    sessionToken: string;
 }
 export interface RateLimitStatus {
     resetTimestamp: Time;
@@ -47,21 +70,44 @@ export interface WebhookConfig {
     enabled: boolean;
     enabledEvents: Array<string>;
 }
+export interface EndUser {
+    principal: Principal;
+    lastSeenAt: Time;
+    userId: string;
+    firstSeenAt: Time;
+    tenantId: TenantId;
+}
+export interface CanisterAttestation {
+    network: string;
+    version: string;
+    message: string;
+    timestamp: Time;
+    canisterId: string;
+}
 export interface Membership {
     role: Role;
     user: Principal;
     tenantId: TenantId;
 }
-export type TenantId = string;
+export interface VerifyAuthResult {
+    isNewUser: boolean;
+    expiresAt: Time;
+    userId: string;
+    sessionToken: string;
+}
 export enum Role {
     Viewer = "Viewer",
     Member = "Member",
     Admin = "Admin"
 }
 export interface backendInterface {
+    addAuditLogEntry(tenantId: TenantId, eventType: string, userId: string, success: boolean, callerPrincipal: string): Promise<void>;
     addMemberByPrincipal(principal: Principal, role: Role): Promise<void>;
     authenticateWithAPIKey(apiKey: ApiKey): Promise<Tenant>;
+    cleanupRateLimitBuckets(): Promise<bigint>;
     configureWebhook(url: string, enabledEvents: Array<string>): Promise<string>;
+    getAllEndUsers(): Promise<Array<EndUser>>;
+    getAllSessions(): Promise<Array<Session>>;
     getAnalyticsSummary(tenantId: TenantId, days: bigint): Promise<{
         webhookHealth: {
             failure: bigint;
@@ -71,6 +117,9 @@ export interface backendInterface {
         totalApiCalls: bigint;
         authSuccessRate: bigint;
     }>;
+    getAuditLog(tenantId: TenantId, limitParam: bigint): Promise<Array<AuditLogEntry>>;
+    getAuditLogCount(tenantId: TenantId): Promise<bigint>;
+    getCanisterAttestation(): Promise<CanisterAttestation>;
     getCurrentTenant(): Promise<Tenant>;
     getDailyTrend(tenantId: TenantId, days: bigint): Promise<Array<[Day, bigint]>>;
     getEventBreakdown(tenantId: TenantId): Promise<{
@@ -80,6 +129,7 @@ export interface backendInterface {
     }>;
     getOrCreateTenant(): Promise<Tenant>;
     getRateLimitStatus(apiKeyHash: ApiKeyHash): Promise<RateLimitStatus>;
+    getRateLimitStatusForCaller(): Promise<RateLimitStatus>;
     getTenantMembers(): Promise<Array<Membership>>;
     getUserRole(): Promise<Role>;
     getWebhookConfig(): Promise<{
@@ -99,4 +149,6 @@ export interface backendInterface {
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateMemberRole(userPrincipal: Principal, newRole: Role): Promise<void>;
     updateWebhookStatus(enabled: boolean): Promise<boolean>;
+    validateSession(apiKey: string, sessionToken: string): Promise<ValidateSessionResult>;
+    verifyAuth(apiKey: string, principalText: string): Promise<VerifyAuthResult>;
 }

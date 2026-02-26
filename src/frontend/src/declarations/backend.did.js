@@ -8,13 +8,13 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const TenantId = IDL.Text;
 export const Role = IDL.Variant({
   'Viewer' : IDL.Null,
   'Member' : IDL.Null,
   'Admin' : IDL.Null,
 });
 export const ApiKey = IDL.Text;
-export const TenantId = IDL.Text;
 export const ApiKeyHash = IDL.Text;
 export const Time = IDL.Int;
 export const Tenant = IDL.Record({
@@ -23,6 +23,37 @@ export const Tenant = IDL.Record({
   'owner' : IDL.Principal,
   'name' : IDL.Text,
   'createdAt' : Time,
+});
+export const EndUser = IDL.Record({
+  'principal' : IDL.Principal,
+  'lastSeenAt' : Time,
+  'userId' : IDL.Text,
+  'firstSeenAt' : Time,
+  'tenantId' : TenantId,
+});
+export const Session = IDL.Record({
+  'principal' : IDL.Principal,
+  'expiresAt' : Time,
+  'userId' : IDL.Text,
+  'createdAt' : Time,
+  'tenantId' : TenantId,
+  'sessionToken' : IDL.Text,
+});
+export const AuditLogEntry = IDL.Record({
+  'id' : IDL.Text,
+  'userId' : IDL.Text,
+  'tenantId' : TenantId,
+  'timestamp' : Time,
+  'callerPrincipal' : IDL.Text,
+  'success' : IDL.Bool,
+  'eventType' : IDL.Text,
+});
+export const CanisterAttestation = IDL.Record({
+  'network' : IDL.Text,
+  'version' : IDL.Text,
+  'message' : IDL.Text,
+  'timestamp' : Time,
+  'canisterId' : IDL.Text,
 });
 export const Day = IDL.Nat;
 export const RateLimitStatus = IDL.Record({
@@ -59,11 +90,30 @@ export const TransformationOutput = IDL.Record({
   'body' : IDL.Vec(IDL.Nat8),
   'headers' : IDL.Vec(http_header),
 });
+export const ValidateSessionResult = IDL.Record({
+  'expiresAt' : Time,
+  'valid' : IDL.Bool,
+  'userId' : IDL.Text,
+});
+export const VerifyAuthResult = IDL.Record({
+  'isNewUser' : IDL.Bool,
+  'expiresAt' : Time,
+  'userId' : IDL.Text,
+  'sessionToken' : IDL.Text,
+});
 
 export const idlService = IDL.Service({
+  'addAuditLogEntry' : IDL.Func(
+      [TenantId, IDL.Text, IDL.Text, IDL.Bool, IDL.Text],
+      [],
+      [],
+    ),
   'addMemberByPrincipal' : IDL.Func([IDL.Principal, Role], [], []),
   'authenticateWithAPIKey' : IDL.Func([ApiKey], [Tenant], []),
+  'cleanupRateLimitBuckets' : IDL.Func([], [IDL.Nat], []),
   'configureWebhook' : IDL.Func([IDL.Text, IDL.Vec(IDL.Text)], [IDL.Text], []),
+  'getAllEndUsers' : IDL.Func([], [IDL.Vec(EndUser)], []),
+  'getAllSessions' : IDL.Func([], [IDL.Vec(Session)], []),
   'getAnalyticsSummary' : IDL.Func(
       [TenantId, IDL.Nat],
       [
@@ -79,6 +129,9 @@ export const idlService = IDL.Service({
       ],
       [],
     ),
+  'getAuditLog' : IDL.Func([TenantId, IDL.Nat], [IDL.Vec(AuditLogEntry)], []),
+  'getAuditLogCount' : IDL.Func([TenantId], [IDL.Nat], []),
+  'getCanisterAttestation' : IDL.Func([], [CanisterAttestation], ['query']),
   'getCurrentTenant' : IDL.Func([], [Tenant], []),
   'getDailyTrend' : IDL.Func(
       [TenantId, IDL.Nat],
@@ -98,6 +151,7 @@ export const idlService = IDL.Service({
     ),
   'getOrCreateTenant' : IDL.Func([], [Tenant], []),
   'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
+  'getRateLimitStatusForCaller' : IDL.Func([], [RateLimitStatus], []),
   'getTenantMembers' : IDL.Func([], [IDL.Vec(Membership)], []),
   'getUserRole' : IDL.Func([], [Role], []),
   'getWebhookConfig' : IDL.Func(
@@ -132,18 +186,24 @@ export const idlService = IDL.Service({
     ),
   'updateMemberRole' : IDL.Func([IDL.Principal, Role], [], []),
   'updateWebhookStatus' : IDL.Func([IDL.Bool], [IDL.Bool], []),
+  'validateSession' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [ValidateSessionResult],
+      [],
+    ),
+  'verifyAuth' : IDL.Func([IDL.Text, IDL.Text], [VerifyAuthResult], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const TenantId = IDL.Text;
   const Role = IDL.Variant({
     'Viewer' : IDL.Null,
     'Member' : IDL.Null,
     'Admin' : IDL.Null,
   });
   const ApiKey = IDL.Text;
-  const TenantId = IDL.Text;
   const ApiKeyHash = IDL.Text;
   const Time = IDL.Int;
   const Tenant = IDL.Record({
@@ -152,6 +212,37 @@ export const idlFactory = ({ IDL }) => {
     'owner' : IDL.Principal,
     'name' : IDL.Text,
     'createdAt' : Time,
+  });
+  const EndUser = IDL.Record({
+    'principal' : IDL.Principal,
+    'lastSeenAt' : Time,
+    'userId' : IDL.Text,
+    'firstSeenAt' : Time,
+    'tenantId' : TenantId,
+  });
+  const Session = IDL.Record({
+    'principal' : IDL.Principal,
+    'expiresAt' : Time,
+    'userId' : IDL.Text,
+    'createdAt' : Time,
+    'tenantId' : TenantId,
+    'sessionToken' : IDL.Text,
+  });
+  const AuditLogEntry = IDL.Record({
+    'id' : IDL.Text,
+    'userId' : IDL.Text,
+    'tenantId' : TenantId,
+    'timestamp' : Time,
+    'callerPrincipal' : IDL.Text,
+    'success' : IDL.Bool,
+    'eventType' : IDL.Text,
+  });
+  const CanisterAttestation = IDL.Record({
+    'network' : IDL.Text,
+    'version' : IDL.Text,
+    'message' : IDL.Text,
+    'timestamp' : Time,
+    'canisterId' : IDL.Text,
   });
   const Day = IDL.Nat;
   const RateLimitStatus = IDL.Record({
@@ -185,15 +276,34 @@ export const idlFactory = ({ IDL }) => {
     'body' : IDL.Vec(IDL.Nat8),
     'headers' : IDL.Vec(http_header),
   });
+  const ValidateSessionResult = IDL.Record({
+    'expiresAt' : Time,
+    'valid' : IDL.Bool,
+    'userId' : IDL.Text,
+  });
+  const VerifyAuthResult = IDL.Record({
+    'isNewUser' : IDL.Bool,
+    'expiresAt' : Time,
+    'userId' : IDL.Text,
+    'sessionToken' : IDL.Text,
+  });
   
   return IDL.Service({
+    'addAuditLogEntry' : IDL.Func(
+        [TenantId, IDL.Text, IDL.Text, IDL.Bool, IDL.Text],
+        [],
+        [],
+      ),
     'addMemberByPrincipal' : IDL.Func([IDL.Principal, Role], [], []),
     'authenticateWithAPIKey' : IDL.Func([ApiKey], [Tenant], []),
+    'cleanupRateLimitBuckets' : IDL.Func([], [IDL.Nat], []),
     'configureWebhook' : IDL.Func(
         [IDL.Text, IDL.Vec(IDL.Text)],
         [IDL.Text],
         [],
       ),
+    'getAllEndUsers' : IDL.Func([], [IDL.Vec(EndUser)], []),
+    'getAllSessions' : IDL.Func([], [IDL.Vec(Session)], []),
     'getAnalyticsSummary' : IDL.Func(
         [TenantId, IDL.Nat],
         [
@@ -209,6 +319,9 @@ export const idlFactory = ({ IDL }) => {
         ],
         [],
       ),
+    'getAuditLog' : IDL.Func([TenantId, IDL.Nat], [IDL.Vec(AuditLogEntry)], []),
+    'getAuditLogCount' : IDL.Func([TenantId], [IDL.Nat], []),
+    'getCanisterAttestation' : IDL.Func([], [CanisterAttestation], ['query']),
     'getCurrentTenant' : IDL.Func([], [Tenant], []),
     'getDailyTrend' : IDL.Func(
         [TenantId, IDL.Nat],
@@ -228,6 +341,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getOrCreateTenant' : IDL.Func([], [Tenant], []),
     'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
+    'getRateLimitStatusForCaller' : IDL.Func([], [RateLimitStatus], []),
     'getTenantMembers' : IDL.Func([], [IDL.Vec(Membership)], []),
     'getUserRole' : IDL.Func([], [Role], []),
     'getWebhookConfig' : IDL.Func(
@@ -262,6 +376,12 @@ export const idlFactory = ({ IDL }) => {
       ),
     'updateMemberRole' : IDL.Func([IDL.Principal, Role], [], []),
     'updateWebhookStatus' : IDL.Func([IDL.Bool], [IDL.Bool], []),
+    'validateSession' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [ValidateSessionResult],
+        [],
+      ),
+    'verifyAuth' : IDL.Func([IDL.Text, IDL.Text], [VerifyAuthResult], []),
   });
 };
 

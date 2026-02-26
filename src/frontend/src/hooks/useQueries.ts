@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useActor } from "./useActor";
-import type { Tenant, Membership } from "../backend";
+import type { Tenant, Membership, AuditLogEntry, CanisterAttestation } from "../backend";
 
 /**
  * Default retry configuration for queries
@@ -209,6 +209,55 @@ export function useGetCycleStats() {
     },
     enabled: !!actor && !isFetching,
     refetchInterval: 30000, // Auto-refresh every 30 seconds
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch audit log entries for a tenant (Admin only)
+ */
+export function useGetAuditLog(tenantId: string | undefined, limit: number = 100) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Array<AuditLogEntry>>({
+    queryKey: ["auditLog", tenantId, limit],
+    queryFn: async () => {
+      if (!actor || !tenantId) throw new Error("Actor or tenant not initialized");
+      return actor.getAuditLog(tenantId, BigInt(limit));
+    },
+    enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch total audit log count for a tenant (Admin only)
+ */
+export function useGetAuditLogCount(tenantId: string | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery<bigint>({
+    queryKey: ["auditLogCount", tenantId],
+    queryFn: async () => {
+      if (!actor || !tenantId) throw new Error("Actor or tenant not initialized");
+      return actor.getAuditLogCount(tenantId);
+    },
+    enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch canister attestation (public, no auth required)
+ */
+export function useGetCanisterAttestation() {
+  const { actor, isFetching } = useActor();
+  return useQuery<CanisterAttestation>({
+    queryKey: ["canisterAttestation"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not initialized");
+      return actor.getCanisterAttestation();
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: 60_000, // Cache for 1 minute — attestation doesn't change often
     ...retryConfig,
   });
 }

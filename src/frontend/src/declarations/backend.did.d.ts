@@ -12,7 +12,30 @@ import type { Principal } from '@icp-sdk/core/principal';
 
 export type ApiKey = string;
 export type ApiKeyHash = string;
+export interface AuditLogEntry {
+  'id' : string,
+  'userId' : string,
+  'tenantId' : TenantId,
+  'timestamp' : Time,
+  'callerPrincipal' : string,
+  'success' : boolean,
+  'eventType' : string,
+}
+export interface CanisterAttestation {
+  'network' : string,
+  'version' : string,
+  'message' : string,
+  'timestamp' : Time,
+  'canisterId' : string,
+}
 export type Day = bigint;
+export interface EndUser {
+  'principal' : Principal,
+  'lastSeenAt' : Time,
+  'userId' : string,
+  'firstSeenAt' : Time,
+  'tenantId' : TenantId,
+}
 export interface Membership {
   'role' : Role,
   'user' : Principal,
@@ -26,6 +49,14 @@ export interface RateLimitStatus {
 export type Role = { 'Viewer' : null } |
   { 'Member' : null } |
   { 'Admin' : null };
+export interface Session {
+  'principal' : Principal,
+  'expiresAt' : Time,
+  'userId' : string,
+  'createdAt' : Time,
+  'tenantId' : TenantId,
+  'sessionToken' : string,
+}
 export interface Tenant {
   'id' : TenantId,
   'apiKeyHash' : ApiKeyHash,
@@ -44,6 +75,17 @@ export interface TransformationOutput {
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
+export interface ValidateSessionResult {
+  'expiresAt' : Time,
+  'valid' : boolean,
+  'userId' : string,
+}
+export interface VerifyAuthResult {
+  'isNewUser' : boolean,
+  'expiresAt' : Time,
+  'userId' : string,
+  'sessionToken' : string,
+}
 export interface WebhookConfig {
   'url' : [] | [string],
   'signingSecret' : string,
@@ -57,9 +99,16 @@ export interface http_request_result {
   'headers' : Array<http_header>,
 }
 export interface _SERVICE {
+  'addAuditLogEntry' : ActorMethod<
+    [TenantId, string, string, boolean, string],
+    undefined
+  >,
   'addMemberByPrincipal' : ActorMethod<[Principal, Role], undefined>,
   'authenticateWithAPIKey' : ActorMethod<[ApiKey], Tenant>,
+  'cleanupRateLimitBuckets' : ActorMethod<[], bigint>,
   'configureWebhook' : ActorMethod<[string, Array<string>], string>,
+  'getAllEndUsers' : ActorMethod<[], Array<EndUser>>,
+  'getAllSessions' : ActorMethod<[], Array<Session>>,
   'getAnalyticsSummary' : ActorMethod<
     [TenantId, bigint],
     {
@@ -69,6 +118,9 @@ export interface _SERVICE {
       'authSuccessRate' : bigint,
     }
   >,
+  'getAuditLog' : ActorMethod<[TenantId, bigint], Array<AuditLogEntry>>,
+  'getAuditLogCount' : ActorMethod<[TenantId], bigint>,
+  'getCanisterAttestation' : ActorMethod<[], CanisterAttestation>,
   'getCurrentTenant' : ActorMethod<[], Tenant>,
   'getDailyTrend' : ActorMethod<[TenantId, bigint], Array<[Day, bigint]>>,
   'getEventBreakdown' : ActorMethod<
@@ -77,6 +129,7 @@ export interface _SERVICE {
   >,
   'getOrCreateTenant' : ActorMethod<[], Tenant>,
   'getRateLimitStatus' : ActorMethod<[ApiKeyHash], RateLimitStatus>,
+  'getRateLimitStatusForCaller' : ActorMethod<[], RateLimitStatus>,
   'getTenantMembers' : ActorMethod<[], Array<Membership>>,
   'getUserRole' : ActorMethod<[], Role>,
   'getWebhookConfig' : ActorMethod<
@@ -99,6 +152,8 @@ export interface _SERVICE {
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateMemberRole' : ActorMethod<[Principal, Role], undefined>,
   'updateWebhookStatus' : ActorMethod<[boolean], boolean>,
+  'validateSession' : ActorMethod<[string, string], ValidateSessionResult>,
+  'verifyAuth' : ActorMethod<[string, string], VerifyAuthResult>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

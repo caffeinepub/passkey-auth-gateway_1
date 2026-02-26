@@ -5,11 +5,14 @@ import Text "mo:core/Text";
 import Time "mo:core/Time";
 import Int "mo:core/Int";
 import Runtime "mo:core/Runtime";
-import Migration "migration";
+import Iter "mo:core/Iter";
+import Nat "mo:core/Nat";
 import HttpOutcall "http-outcalls/outcall";
+import Migration "migration";
 
 (with migration = Migration.run)
 actor {
+  // Types and State
   type TenantId = Text;
   type ApiKey = Text;
   type ApiKeyHash = Text;
@@ -70,16 +73,79 @@ actor {
     windowStart : Time.Time;
   };
 
+  public type EndUser = {
+    userId : Text;
+    principal : Principal;
+    tenantId : TenantId;
+    firstSeenAt : Time.Time;
+    lastSeenAt : Time.Time;
+  };
+
+  public type Session = {
+    sessionToken : Text;
+    tenantId : TenantId;
+    userId : Text;
+    principal : Principal;
+    createdAt : Time.Time;
+    expiresAt : Time.Time;
+  };
+
+  public type VerifyAuthResult = {
+    sessionToken : Text;
+    userId : Text;
+    expiresAt : Time.Time;
+    isNewUser : Bool;
+  };
+
+  public type ValidateSessionResult = {
+    userId : Text;
+    valid : Bool;
+    expiresAt : Time.Time;
+  };
+
+  // Audit log types
+  public type AuditLogEntry = {
+    id : Text;
+    tenantId : TenantId;
+    eventType : Text;
+    userId : Text;
+    timestamp : Time.Time;
+    success : Bool;
+    callerPrincipal : Text;
+  };
+
+  public type CanisterAttestation = {
+    canisterId : Text;
+    timestamp : Time.Time;
+    version : Text;
+    message : Text;
+    network : Text;
+  };
+
+  // Stable collaborators keeping to notion content
   let tenants = Map.empty<TenantId, Tenant>();
   let memberships = Map.empty<TenantId, List.List<Membership>>();
   let webhooks = Map.empty<TenantId, WebhookConfig>();
   let authEvents = Map.empty<TenantId, List.List<AuthEvent>>();
   let dailyAggregates = Map.empty<TenantId, Map.Map<Day, DailyAggregate>>();
   let retentionPeriod = 30 * 24 * 60 * 60 * 1_000_000_000 : Nat; // 30 days in nanoseconds
-  let rateLimitBuckets = Map.empty<ApiKeyHash, RateLimitBucket>();
+  var rateLimitBuckets = Map.empty<ApiKeyHash, RateLimitBucket>();
+  let systemAdmins = Map.empty<Principal, Bool>();
+
+  let endUsers = Map.empty<Text, EndUser>();
+  let sessions = Map.empty<Text, Session>();
+
+  // Audit log storage
+  let auditLog = Map.empty<TenantId, List.List<AuditLogEntry>>();
+  var auditLogCounter = 0;
 
   public shared query ({ caller }) func transform(input : HttpOutcall.TransformationInput) : async HttpOutcall.TransformationOutput {
     HttpOutcall.transform(input);
+  };
+
+  // Role-based Access Control (RBAC)
+  func isSystemAdmin(principal : Principal) : Bool {
+    systemAdmins.containsKey(principal);
   };
 
   func generateApiKey(tenantId : TenantId) : (ApiKey, ApiKeyHash) {
@@ -175,12 +241,21 @@ actor {
       case (null) { Runtime.trap("Tenant not found") };
     };
 
-    requireAdminRole(tenant.id, caller);
+    requireAdminRole(tenant.id, caller); // Check privileges
 
     let (newApiKey, newApiKeyHash) = generateApiKey(tenant.id);
 
     let updatedTenant = { tenant with apiKeyHash = newApiKeyHash };
     tenants.add(tenant.id, updatedTenant);
+
+    // Log event
+    await addAuditLogEntry(
+      tenant.id,
+      "api_key_regenerated",
+      Principal.anonymous().toText(),
+      true,
+      caller.toText(), // Provide caller's principal as Text
+    );
 
     newApiKey;
   };
@@ -240,8 +315,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     if (not isAdmin(caller, tenant.id)) {
       Runtime.trap("Only admins can add members");
@@ -264,6 +341,15 @@ actor {
 
     existingMembers.add(member);
     memberships.add(tenant.id, existingMembers);
+
+    // Log event
+    await addAuditLogEntry(
+      tenant.id,
+      "member_added",
+      principal.toText(),
+      true,
+      caller.toText(), // Provide caller's principal as Text
+    );
   };
 
   func findTenantByCaller(caller : Principal) : TenantId {
@@ -293,8 +379,10 @@ actor {
       case (?existingTenant) { existingTenant };
       case (null) { Runtime.trap("Tenant lookup failed") };
     };
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     if (not isAdmin(caller, tenantId)) {
       Runtime.trap("Only admins can update member roles");
@@ -327,6 +415,15 @@ actor {
     let filteredList = memberList.filter(func(m) { m.user != member.user });
     filteredList.add(updatedMember);
     memberships.add(tenantId, filteredList);
+
+    // Log event
+    await addAuditLogEntry(
+      tenantId,
+      "role_changed",
+      userPrincipal.toText(),
+      true,
+      caller.toText(), // Provide caller's principal as Text
+    );
   };
 
   public shared ({ caller }) func removeMember(userPrincipal : Principal) : async () {
@@ -340,8 +437,10 @@ actor {
       case (?existingTenant) { existingTenant };
       case (null) { Runtime.trap("Tenant lookup failed") };
     };
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     if (not isAdmin(caller, tenantId)) {
       Runtime.trap("Only admins can remove members");
@@ -365,6 +464,15 @@ actor {
 
     let filteredList = memberList.filter(func(m) { m.user != member.user });
     memberships.add(tenantId, filteredList);
+
+    // Log event
+    await addAuditLogEntry(
+      tenantId,
+      "member_removed",
+      userPrincipal.toText(),
+      true,
+      caller.toText(), // Provide caller's principal as Text
+    );
   };
 
   public shared ({ caller }) func getUserRole() : async Role {
@@ -390,8 +498,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     requireAdminOrMemberRole(tenant.id, caller);
 
@@ -450,8 +560,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     switch (webhooks.get(tenant.id)) {
       case (?config) {
@@ -476,8 +588,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found for caller") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     requireAdminOrMemberRole(tenant.id, caller);
 
@@ -559,6 +673,15 @@ actor {
     dailyAggregates.add(tenantId, currentDayAggregates);
 
     cleanupOldData(tenantId);
+
+    // Also record in the audit log
+    await addAuditLogEntry(
+      tenantId,
+      eventType,
+      userId,
+      success,
+      "system",
+    );
   };
 
   public shared ({ caller }) func recordWebhookEvent(tenantId : TenantId, success : Bool) : async () {
@@ -632,8 +755,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     let currentDay = getCurrentDay();
     var totalCalls = 0;
@@ -646,7 +771,7 @@ actor {
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
 
-    let lowerBound = if (days >= currentDay) { 0 } else { currentDay - days };
+    let lowerBound = Int.abs(currentDay - days);
 
     for ((day, agg) in aggregates.entries()) {
       if (day >= lowerBound and day <= currentDay) {
@@ -687,8 +812,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     let currentDay = getCurrentDay();
     var trend = List.empty<(Day, Nat)>();
@@ -698,7 +825,7 @@ actor {
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
 
-    let lowerBound = if (days >= currentDay) { 0 } else { currentDay - days };
+    let lowerBound = Int.abs(currentDay - days);
 
     for ((day, agg) in aggregates.entries()) {
       if (day >= lowerBound and day <= currentDay) {
@@ -723,8 +850,10 @@ actor {
       case (null) { Runtime.trap("Tenant not found") };
     };
 
-    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
-    if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    if (not isSystemAdmin(caller)) {
+      let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+      if (not allowed) { Runtime.trap("Rate limit exceeded") };
+    };
 
     let events = switch (authEvents.get(tenantId)) {
       case (?evts) { evts };
@@ -738,7 +867,7 @@ actor {
 
     events.toArray().forEach(
       func(event) {
-        if (event.timestamp >= (now - retentionPeriod)) {
+        if (event.timestamp >= (now - retentionPeriod : Int)) {
           if (event.eventType == "user_registered") { registered += 1 };
           if (event.eventType == "user_authenticated") { authenticated += 1 };
           if (event.eventType == "auth_failed") { failed += 1 };
@@ -772,7 +901,7 @@ actor {
       case (null) { Map.empty<Day, DailyAggregate>() };
     };
 
-    let thirtyDaysAgo = if (currentDay >= 30) { currentDay - 30 } else { 0 };
+    let thirtyDaysAgo = Int.abs(currentDay - 30);
     let filteredAggregates = aggregates.filter(
       func(day, agg) {
         day >= thirtyDaysAgo;
@@ -803,6 +932,256 @@ actor {
       used = currentCount;
       limit;
       resetTimestamp = windowStart + 3600_000_000_000;
+    };
+  };
+
+  public shared ({ caller }) func getRateLimitStatusForCaller() : async RateLimitStatus {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Must be an authenticated principal");
+    };
+
+    let tenantOpt = tenants.values().find(func(t) { t.owner == caller });
+
+    switch (tenantOpt) {
+      case (?tenant) {
+        let now = Time.now();
+        let (currentCount, windowStart) = switch (rateLimitBuckets.get(tenant.apiKeyHash)) {
+          case (?bucket) {
+            if (now >= (bucket.windowStart + 3600_000_000_000)) {
+              (0, now);
+            } else { (bucket.count, bucket.windowStart) };
+          };
+          case (null) { (0, now) };
+        };
+
+        let plan = "free";
+        let limit = switch (plan) {
+          case ("pro") { 10_000 };
+          case ("enterprise") { 100_000 };
+          case (_) { 1_000 };
+        };
+
+        {
+          used = currentCount;
+          limit;
+          resetTimestamp = windowStart + 3600_000_000_000;
+        };
+      };
+      case (null) { Runtime.trap("Tenant not found for caller") };
+    };
+  };
+
+  public shared ({ caller }) func cleanupRateLimitBuckets() : async Nat {
+    if (not isSystemAdmin(caller)) {
+      Runtime.trap("Permission denied: system admin only");
+    };
+
+    let now = Time.now();
+
+    let expiredBuckets = rateLimitBuckets.filter(func(_k, v) { v.windowStart + 3_600_000_000_000 < now });
+
+    let expiredCount = expiredBuckets.size();
+
+    let unexpiredBuckets = rateLimitBuckets.filter(func(_k, v) { v.windowStart + 3_600_000_000_000 >= now });
+    rateLimitBuckets := unexpiredBuckets;
+
+    expiredCount;
+  };
+
+  func generateSessionToken() : Text {
+    let timestamp = Time.now().toText();
+    "st_" # timestamp # "_" # timestamp;
+  };
+
+  func generateUserId(p : Principal) : Text {
+    "usr_" # p.toText();
+  };
+
+  // New public verifyAuth API.
+  public shared ({ caller }) func verifyAuth(apiKey : Text, principalText : Text) : async VerifyAuthResult {
+    let tenant = switch (tenants.values().find(func(t) { verifyApiKey(apiKey, t.apiKeyHash) })) {
+      case (?t) { t };
+      case (null) { Runtime.trap("Invalid API key") };
+    };
+
+    let allowed = checkAndIncrementRateLimit(tenant.apiKeyHash);
+    if (not allowed) { Runtime.trap("Rate limit exceeded. Max 1,000 requests per hour.") };
+
+    let compositeKey = tenant.id # "#" # principalText;
+    let now = Time.now();
+    var isNewUser = false;
+
+    let endUser = switch (endUsers.get(compositeKey)) {
+      case (?existingUser) {
+        let updatedUser = { existingUser with lastSeenAt = now };
+        endUsers.add(compositeKey, updatedUser);
+        updatedUser;
+      };
+      case (null) {
+        let principal = Principal.fromText(principalText);
+        let userId = generateUserId(principal);
+        let newEndUser = {
+          userId;
+          principal;
+          tenantId = tenant.id;
+          firstSeenAt = now;
+          lastSeenAt = now;
+        };
+        endUsers.add(compositeKey, newEndUser);
+
+        isNewUser := true;
+        newEndUser;
+      };
+    };
+
+    let expiresAt = now + 24 * 60 * 60 * 1_000_000_000;
+    let sessionToken = generateSessionToken();
+    let newSession = {
+      sessionToken;
+      tenantId = tenant.id;
+      userId = endUser.userId;
+      principal = endUser.principal;
+      createdAt = now;
+      expiresAt;
+    };
+    sessions.add(sessionToken, newSession);
+
+    await recordAuthEvent(tenant.id, if isNewUser { "user_registered" } else {
+      "user_authenticated";
+    }, endUser.userId, true);
+
+    {
+      sessionToken;
+      userId = endUser.userId;
+      expiresAt;
+      isNewUser;
+    };
+  };
+
+  // New public validateSession API
+  public shared ({ caller }) func validateSession(apiKey : Text, sessionToken : Text) : async ValidateSessionResult {
+    let tenant = switch (tenants.values().find(func(t) { verifyApiKey(apiKey, t.apiKeyHash) })) {
+      case (?t) { t };
+      case (null) { Runtime.trap("Invalid API key") };
+    };
+
+    switch (sessions.get(sessionToken)) {
+      case (?session) {
+        if (session.tenantId != tenant.id) { switch (endUsers.get(sessionToken)) {
+          case (?endUser) {
+            if (endUser.tenantId != tenant.id) {
+              return { userId = ""; valid = false; expiresAt = 0 };
+            };
+          };
+          case (null) { return { userId = ""; valid = false; expiresAt = 0 } };
+        } };
+      };
+      case (null) { return { userId = ""; valid = false; expiresAt = 0 } };
+    };
+
+    switch (sessions.get(sessionToken)) {
+      case (?session) {
+        if (Time.now() > session.expiresAt) {
+          return {
+            userId = session.userId;
+            valid = false;
+            expiresAt = session.expiresAt;
+          };
+        };
+      };
+      case (null) { return { userId = ""; valid = false; expiresAt = 0 } };
+    };
+
+    switch (sessions.get(sessionToken)) {
+      case (?session) {
+        {
+          userId = session.userId;
+          valid = true;
+          expiresAt = session.expiresAt;
+        };
+      };
+      case (null) { return { userId = ""; valid = false; expiresAt = 0 } };
+    };
+  };
+
+  // Expose endUsers and sessions for testing.
+  public shared ({ caller }) func getAllEndUsers() : async [EndUser] {
+    endUsers.values().toArray();
+  };
+
+  public shared ({ caller }) func getAllSessions() : async [Session] {
+    sessions.values().toArray();
+  };
+
+  // --------------------- Audit log helpers ---------------------
+
+  public shared ({ caller }) func addAuditLogEntry(
+    tenantId : TenantId,
+    eventType : Text,
+    userId : Text,
+    success : Bool,
+    callerPrincipal : Text,
+  ) : async () {
+    let newEntry : AuditLogEntry = {
+      id = (auditLogCounter + 1).toText();
+      tenantId;
+      eventType;
+      userId;
+      timestamp = Time.now();
+      success;
+      callerPrincipal;
+    };
+
+    let currentEntries = switch (auditLog.get(tenantId)) {
+      case (?entries) { entries };
+      case (null) { List.empty<AuditLogEntry>() };
+    };
+    currentEntries.add(newEntry);
+
+    auditLog.add(tenantId, currentEntries);
+    auditLogCounter += 1;
+  };
+
+  public shared ({ caller }) func getAuditLog(tenantId : TenantId, limitParam : Nat) : async [AuditLogEntry] {
+    // Permission check, require Admin role
+    if (not tenants.containsKey(tenantId)) {
+      Runtime.trap("Tenant not found");
+    };
+
+    requireAdminRole(tenantId, caller);
+
+    let limit = if (limitParam > 500) { 500 } else { limitParam };
+
+    switch (auditLog.get(tenantId)) {
+      case (?logEntries) {
+        let reversed = logEntries.reverse();
+        let sliced = reversed.enumerate().filter(func((i, _)) { i < limit }).map(func((_, entry)) { entry });
+        sliced.toArray();
+      };
+      case (null) { [] };
+    };
+  };
+
+  public shared ({ caller }) func getAuditLogCount(tenantId : TenantId) : async Nat {
+    if (not tenants.containsKey(tenantId)) {
+      Runtime.trap("Tenant not found");
+    };
+
+    requireAdminRole(tenantId, caller);
+
+    switch (auditLog.get(tenantId)) {
+      case (?entries) { entries.size() };
+      case (null) { 0 };
+    };
+  };
+
+  public query ({ caller }) func getCanisterAttestation() : async CanisterAttestation {
+    {
+      canisterId = "lep6p-paaaa-aaaai-q5v4q-cai";
+      timestamp = Time.now();
+      version = "avantkey-v1";
+      message = "This canister is deployed on the Internet Computer Protocol (ICP). Verify at: https://dashboard.internetcomputer.org/canister/lep6p-paaaa-aaaai-q5v4q-cai";
+      network = "Internet Computer Mainnet";
     };
   };
 };

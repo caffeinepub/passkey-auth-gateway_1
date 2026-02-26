@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, LogOut, LayoutDashboard, Webhook, Settings as SettingsIcon, CreditCard, Gauge } from "lucide-react";
+import { Shield, LogOut, LayoutDashboard, Webhook, Settings as SettingsIcon, CreditCard, Gauge, BookOpen, ScrollText } from "lucide-react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useGetCurrentTenant, useGetUserRole, useGetCycleBalance } from "../hooks/useQueries";
 import Dashboard from "./Dashboard";
@@ -8,11 +8,13 @@ import Webhooks from "./Webhooks";
 import Billing from "./Billing";
 import Settings from "./Settings";
 import CyclesPage from "./CyclesPage";
+import AuditLog from "./AuditLog";
+import Docs from "./Docs";
 import CycleWarningBanner from "../components/CycleWarningBanner";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { useQueryClient } from "@tanstack/react-query";
 
-type Page = "dashboard" | "webhooks" | "billing" | "settings" | "cycles";
+type Page = "dashboard" | "webhooks" | "billing" | "settings" | "cycles" | "audit" | "docs";
 
 export default function DashboardLayout() {
   const { clear } = useInternetIdentity();
@@ -99,6 +101,15 @@ export default function DashboardLayout() {
                 Webhooks
               </Button>
               <Button
+                variant={currentPage === "docs" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setCurrentPage("docs")}
+                className="gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                Docs
+              </Button>
+              <Button
                 variant={currentPage === "billing" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setCurrentPage("billing")}
@@ -116,6 +127,17 @@ export default function DashboardLayout() {
                 >
                   <Gauge className="w-4 h-4" />
                   Cycles
+                </Button>
+              )}
+              {userRole === "Admin" && (
+                <Button
+                  variant={currentPage === "audit" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setCurrentPage("audit")}
+                  className="gap-2"
+                >
+                  <ScrollText className="w-4 h-4" />
+                  Audit Log
                 </Button>
               )}
               {userRole !== "Viewer" && (
@@ -160,6 +182,15 @@ export default function DashboardLayout() {
               Webhooks
             </Button>
             <Button
+              variant={currentPage === "docs" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setCurrentPage("docs")}
+              className="gap-2 flex-1 min-w-fit"
+            >
+              <BookOpen className="w-4 h-4" />
+              Docs
+            </Button>
+            <Button
               variant={currentPage === "billing" ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setCurrentPage("billing")}
@@ -179,6 +210,17 @@ export default function DashboardLayout() {
                 Cycles
               </Button>
             )}
+            {userRole === "Admin" && (
+              <Button
+                variant={currentPage === "audit" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setCurrentPage("audit")}
+                className="gap-2 flex-1 min-w-fit"
+              >
+                <ScrollText className="w-4 h-4" />
+                Audit Log
+              </Button>
+            )}
             {userRole !== "Viewer" && (
               <Button
                 variant={currentPage === "settings" ? "secondary" : "ghost"}
@@ -195,7 +237,7 @@ export default function DashboardLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-6 py-8">
+      <main className={`flex-1 ${currentPage === "docs" ? "" : "container mx-auto px-6 py-8"}`}>
         {currentPage === "dashboard" ? (
           <Dashboard />
         ) : currentPage === "webhooks" ? (
@@ -204,6 +246,10 @@ export default function DashboardLayout() {
           <Billing />
         ) : currentPage === "cycles" ? (
           <CyclesPage />
+        ) : currentPage === "audit" ? (
+          <AuditLog />
+        ) : currentPage === "docs" ? (
+          <Docs />
         ) : (
           <Settings />
         )}

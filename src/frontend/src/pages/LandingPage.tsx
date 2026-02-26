@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Docs from "./Docs";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,6 +25,8 @@ import {
   Copy,
   ChevronRight,
   Globe,
+  ClipboardList,
+  BadgeCheck,
 } from "lucide-react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { toast } from "sonner";
@@ -43,7 +46,12 @@ const curlCodeSample = `curl https://api.avantkey.com/auth/verify \\
 export default function LandingPage() {
   const { login, loginStatus, identity } = useInternetIdentity();
   const [copiedCode, setCopiedCode] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
   const isAuthenticated = identity && !identity.getPrincipal().isAnonymous();
+
+  if (showDocs) {
+    return <Docs onBack={() => setShowDocs(false)} />;
+  }
 
   // Smooth scroll to section
   const scrollToSection = (id: string) => {
@@ -83,22 +91,32 @@ export default function LandingPage() {
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
             <button
+              type="button"
               onClick={() => scrollToSection("features")}
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Features
             </button>
             <button
+              type="button"
               onClick={() => scrollToSection("pricing")}
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Pricing
             </button>
             <button
+              type="button"
               onClick={() => scrollToSection("demo")}
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDocs(true)}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Docs
             </button>
           </nav>
 
@@ -265,7 +283,7 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {/* True Password Elimination */}
               <Card className="shadow-card">
                 <CardHeader>
@@ -322,11 +340,53 @@ export default function LandingPage() {
                     <Zap className="w-6 h-6 text-warning" />
                   </div>
                   <CardTitle className="font-display">
-                    Auth0 Alternative for Startups
+                    Built for Builders
                   </CardTitle>
                   <CardDescription>
-                    Simple integration. Enterprise-grade security. 100x cheaper pricing. 
-                    Everything you need to become the premier authentication provider.
+                    Simple integration. Enterprise-grade security. Predictable pricing. 
+                    Everything you need to ship secure auth without enterprise sales cycles.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+
+              {/* Certified Audit Log */}
+              <Card className="shadow-card">
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                    <ClipboardList className="w-6 h-6 text-primary" />
+                  </div>
+                  <CardTitle className="font-display">
+                    Certified Audit Log
+                  </CardTitle>
+                  <CardDescription>
+                    Every auth event recorded on-chain. Append-only, cryptographically 
+                    stored — your compliance log can't be edited or deleted by anyone.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+
+              {/* On-Chain Verified */}
+              <Card className="shadow-card">
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center mb-4">
+                    <BadgeCheck className="w-6 h-6 text-success" />
+                  </div>
+                  <CardTitle className="font-display">
+                    On-Chain Verified
+                  </CardTitle>
+                  <CardDescription>
+                    Our canister ID is publicly verifiable on ICP. Check our 
+                    infrastructure anytime — no trust required.{" "}
+                    <a
+                      href="/verify"
+                      className="text-primary hover:underline font-medium"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.location.href = "/verify";
+                      }}
+                    >
+                      Verify now →
+                    </a>
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -425,14 +485,14 @@ export default function LandingPage() {
                   <div className="w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
                     💰
                   </div>
-                  <div>
-                    <p className="font-semibold text-lg">
-                      100x more affordable than Auth0
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      $29/month vs $240/month for 10K users. Same security. Better infrastructure.
-                    </p>
-                  </div>
+                   <div>
+                     <p className="font-semibold text-lg">
+                       10K users for $29/month.
+                     </p>
+                     <p className="text-sm text-muted-foreground mt-1">
+                       Traditional auth providers charge 8x more for the same scale. Same security. Better infrastructure.
+                     </p>
+                   </div>
                 </CardContent>
               </Card>
             </div>
@@ -601,8 +661,8 @@ export default function LandingPage() {
                           <th className="text-center p-4 font-display font-semibold bg-primary/5">
                             Avantkey
                           </th>
-                          <th className="text-center p-4 font-display font-semibold">
-                            Auth0 / Clerk
+                           <th className="text-center p-4 font-display font-semibold">
+                            Traditional Auth Providers
                           </th>
                         </tr>
                       </thead>
@@ -791,6 +851,7 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
                   <button
+                    type="button"
                     onClick={() => scrollToSection("features")}
                     className="hover:text-foreground transition-colors"
                   >
@@ -799,6 +860,7 @@ export default function LandingPage() {
                 </li>
                 <li>
                   <button
+                    type="button"
                     onClick={() => scrollToSection("pricing")}
                     className="hover:text-foreground transition-colors"
                   >
@@ -807,6 +869,7 @@ export default function LandingPage() {
                 </li>
                 <li>
                   <button
+                    type="button"
                     onClick={() => scrollToSection("demo")}
                     className="hover:text-foreground transition-colors"
                   >
@@ -821,19 +884,25 @@ export default function LandingPage() {
               <h3 className="font-display font-semibold">Resources</h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setShowDocs(true)}
+                    className="hover:text-foreground transition-colors"
+                  >
                     Documentation
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setShowDocs(true)}
+                    className="hover:text-foreground transition-colors"
+                  >
                     API Reference
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    GitHub
-                  </a>
+                  <span className="cursor-default">GitHub</span>
                 </li>
               </ul>
             </div>
@@ -843,19 +912,13 @@ export default function LandingPage() {
               <h3 className="font-display font-semibold">Company</h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    About
-                  </a>
+                  <span className="cursor-default">About</span>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    Blog
-                  </a>
+                  <span className="cursor-default">Blog</span>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    Contact
-                  </a>
+                  <span className="cursor-default">Contact</span>
                 </li>
               </ul>
             </div>
@@ -865,19 +928,13 @@ export default function LandingPage() {
               <h3 className="font-display font-semibold">Legal</h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    Privacy
-                  </a>
+                  <span className="cursor-default">Privacy</span>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    Terms
-                  </a>
+                  <span className="cursor-default">Terms</span>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-foreground transition-colors">
-                    Security
-                  </a>
+                  <span className="cursor-default">Security</span>
                 </li>
               </ul>
             </div>

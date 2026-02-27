@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useActor } from "./useActor";
-import type { Tenant, Membership, AuditLogEntry, CanisterAttestation } from "../backend";
+import type { Tenant, Membership, AuditLogEntry, CanisterAttestation, AvantKeySession } from "../backend";
 
 /**
  * Default retry configuration for queries
@@ -241,6 +241,22 @@ export function useGetAuditLogCount(tenantId: string | undefined) {
       return actor.getAuditLogCount(tenantId);
     },
     enabled: !!actor && !isFetching && !!tenantId,
+    ...retryConfig,
+  });
+}
+
+/**
+ * Fetch the current user's AvantKey session (if any)
+ */
+export function useGetMySession() {
+  const { actor, isFetching } = useActor();
+  return useQuery<AvantKeySession | null>({
+    queryKey: ["mySession"],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getMySession();
+    },
+    enabled: !!actor && !isFetching,
     ...retryConfig,
   });
 }

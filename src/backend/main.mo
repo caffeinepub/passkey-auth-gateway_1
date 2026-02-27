@@ -9,14 +9,13 @@ import Iter "mo:core/Iter";
 import Nat "mo:core/Nat";
 import HttpOutcall "http-outcalls/outcall";
 
-
-
 actor {
   // Types and State
   type TenantId = Text;
   type ApiKey = Text;
   type ApiKeyHash = Text;
   type Day = Nat;
+  public type SessionId = Text;
 
   type Role = {
     #Admin;
@@ -122,6 +121,16 @@ actor {
     network : Text;
   };
 
+  // --- AvantKey Delegation Layer Types ---
+  public type AvantKeySession = {
+    sessionId : SessionId;
+    tenantId : TenantId;
+    principal : Principal;
+    issuedAt : Time.Time;
+    expiresAt : Time.Time;
+    revoked : Bool;
+  };
+
   // Stable collaborators keeping to notion content
   let tenants = Map.empty<TenantId, Tenant>();
   let memberships = Map.empty<TenantId, List.List<Membership>>();
@@ -139,11 +148,103 @@ actor {
   let auditLog = Map.empty<TenantId, List.List<AuditLogEntry>>();
   var auditLogCounter = 0;
 
+  // --- AvantKey Delegation Layer State ---
+  let avantKeySessions = Map.empty<SessionId, AvantKeySession>(); // Keyed by sessionId
+  let principalToSession = Map.empty<Principal, SessionId>(); // Keyed by principal
+
   public shared query ({ caller }) func transform(input : HttpOutcall.TransformationInput) : async HttpOutcall.TransformationOutput {
     HttpOutcall.transform(input);
   };
 
-  // Role-based Access Control (RBAC)
+  // --- AvantKey Delegation Layer functions ---
+  public shared ({ caller }) func registerDelegation(tenantId : TenantId) : async AvantKeySession {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Anonymous calls not allowed. Must authenticate with principal.");
+    };
+
+    // Compose session details
+    let sessionId = "avantkey:" # caller.toText() # ":" # Time.now().toText();
+    let now = Time.now();
+    let expiresAt = now + 24 * 60 * 60 * 1_000_000_000; // 24 hours
+
+    let newSession : AvantKeySession = {
+      sessionId;
+      tenantId;
+      principal = caller;
+      issuedAt = now;
+      expiresAt;
+      revoked = false;
+    };
+
+    avantKeySessions.add(sessionId, newSession);
+    principalToSession.add(caller, sessionId);
+
+    // Add audit log entry
+    await addAuditLogEntry(
+      tenantId,
+      "avantkey_session_registered",
+      caller.toText(),
+      true,
+      caller.toText(),
+    );
+
+    newSession;
+  };
+
+  public shared query ({ caller }) func getMySession() : async ?AvantKeySession {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Anonymous calls not allowed. Must authenticate with principal.");
+    };
+
+    switch (principalToSession.get(caller)) {
+      case (?sessionId) {
+        switch (avantKeySessions.get(sessionId)) {
+          case (?session) {
+            if (session.revoked or Time.now() > session.expiresAt) {
+              null;
+            } else { ?session };
+          };
+          case (null) { null };
+        };
+      };
+      case (null) { null };
+    };
+  };
+
+  public shared ({ caller }) func revokeMySession() : async Bool {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Anonymous calls not allowed. Must authenticate with principal.");
+    };
+
+    switch (principalToSession.get(caller)) {
+      case (?sessionId) {
+        switch (avantKeySessions.get(sessionId)) {
+          case (?session) {
+            if (session.revoked or Time.now() > session.expiresAt) {
+              Runtime.trap("Session already expired or revoked");
+            };
+
+            let updatedSession = { session with revoked = true };
+            avantKeySessions.add(sessionId, updatedSession);
+
+            // Log audit event
+            ignore addAuditLogEntry(
+              session.tenantId,
+              "avantkey_session_revoked",
+              caller.toText(),
+              true,
+              caller.toText(),
+            );
+
+            true;
+          };
+          case (null) { Runtime.trap("Active session not found") };
+        };
+      };
+      case (null) { Runtime.trap("No active session found") };
+    };
+  };
+
   func isSystemAdmin(principal : Principal) : Bool {
     systemAdmins.containsKey(principal);
   };

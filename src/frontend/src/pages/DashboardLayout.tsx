@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useGetCurrentTenant, useGetUserRole, useGetCycleBalance } from "../hooks/useQueries";
+import { useAvantKeySession } from "../hooks/useAvantKeySession";
 import Dashboard from "./Dashboard";
 import Webhooks from "./Webhooks";
 import Billing from "./Billing";
@@ -49,6 +50,7 @@ interface SidebarNavProps {
   tenantName?: string;
   userRole?: string;
   onLogout: () => void;
+  sessionActive?: boolean;
 }
 
 function SidebarNav({
@@ -57,6 +59,7 @@ function SidebarNav({
   tenantName,
   userRole,
   onLogout,
+  sessionActive,
 }: SidebarNavProps) {
   const mainNavItems: NavItem[] = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -147,9 +150,21 @@ function SidebarNav({
         )}
       </nav>
 
-      {/* Logout area */}
+      {/* Session indicator + Logout area */}
       <div className="px-3 pb-4">
         <Separator className="mb-3" />
+
+        {/* Session status indicator */}
+        {sessionActive && (
+          <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg bg-success/8">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+            </span>
+            <span className="text-xs text-success font-medium">Session active</span>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onLogout}
@@ -171,9 +186,11 @@ export default function DashboardLayout() {
   const { data: tenant, error: tenantError } = useGetCurrentTenant();
   const { data: userRole } = useGetUserRole();
   const { data: cycleBalance } = useGetCycleBalance();
+  const { session, registerSession } = useAvantKeySession();
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [showOfflineBanner, setShowOfflineBanner] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const registeredRef = useRef(false);
 
   // Detect if backend is offline by checking tenant error
   useEffect(() => {
@@ -189,6 +206,21 @@ export default function DashboardLayout() {
       setShowOfflineBanner(false);
     }
   }, [tenantError]);
+
+  // Auto-register delegation once when tenant is loaded and no active session exists
+  useEffect(() => {
+    if (!tenant || registeredRef.current) return;
+    // session === null means loaded but no session; undefined means still loading
+    if (session === undefined) return;
+    const isActive = session !== null && !session.revoked;
+    if (!isActive) {
+      registeredRef.current = true;
+      registerSession(tenant.id);
+    } else {
+      // Already have an active session — mark as registered so we don't re-trigger
+      registeredRef.current = true;
+    }
+  }, [tenant, session, registerSession]);
 
   const handleRetryConnection = async () => {
     await queryClient.invalidateQueries();
@@ -213,6 +245,7 @@ export default function DashboardLayout() {
           tenantName={tenant?.name}
           userRole={userRole}
           onLogout={handleLogout}
+          sessionActive={!!session && !session.revoked}
         />
       </aside>
 
@@ -234,6 +267,7 @@ export default function DashboardLayout() {
                 tenantName={tenant?.name}
                 userRole={userRole}
                 onLogout={handleLogout}
+                sessionActive={!!session && !session.revoked}
               />
             </SheetContent>
           </Sheet>

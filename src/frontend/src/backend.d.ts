@@ -31,11 +31,20 @@ export interface AuditLogEntry {
     eventType: string;
 }
 export type Day = bigint;
+export interface AvantKeySession {
+    principal: Principal;
+    expiresAt: Time;
+    revoked: boolean;
+    tenantId: TenantId;
+    sessionId: SessionId;
+    issuedAt: Time;
+}
 export interface ValidateSessionResult {
     expiresAt: Time;
     valid: boolean;
     userId: string;
 }
+export type SessionId = string;
 export type ApiKey = string;
 export interface http_header {
     value: string;
@@ -127,6 +136,7 @@ export interface backendInterface {
         failed: bigint;
         registered: bigint;
     }>;
+    getMySession(): Promise<AvantKeySession | null>;
     getOrCreateTenant(): Promise<Tenant>;
     getRateLimitStatus(apiKeyHash: ApiKeyHash): Promise<RateLimitStatus>;
     getRateLimitStatusForCaller(): Promise<RateLimitStatus>;
@@ -141,7 +151,9 @@ export interface backendInterface {
     recordAuthEvent(tenantId: TenantId, eventType: string, userId: string, success: boolean): Promise<void>;
     recordWebhookEvent(tenantId: TenantId, success: boolean): Promise<void>;
     regenerateApiKey(): Promise<ApiKey>;
+    registerDelegation(tenantId: TenantId): Promise<AvantKeySession>;
     removeMember(userPrincipal: Principal): Promise<void>;
+    revokeMySession(): Promise<boolean>;
     testWebhook(): Promise<{
         status: number;
         message: string;

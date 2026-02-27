@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Docs from "./Docs";
+import LoginModal from "../components/LoginModal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -44,9 +45,10 @@ const curlCodeSample = `curl https://api.avantkey.com/auth/verify \\
   -d "token=..."`;
 
 export default function LandingPage() {
-  const { login, loginStatus, identity } = useInternetIdentity();
+  const { identity } = useInternetIdentity();
   const [copiedCode, setCopiedCode] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const isAuthenticated = identity && !identity.getPrincipal().isAnonymous();
 
   if (showDocs) {
@@ -64,7 +66,7 @@ export default function LandingPage() {
   // Handle CTA click
   const handleGetStarted = () => {
     if (!isAuthenticated) {
-      login();
+      setShowLoginModal(true);
     }
   };
 
@@ -129,14 +131,13 @@ export default function LandingPage() {
             )}
             <Button
               size="sm"
-              onClick={handleGetStarted}
-              disabled={loginStatus === "logging-in"}
+              onClick={
+                isAuthenticated
+                  ? () => { window.location.href = "/dashboard"; }
+                  : handleGetStarted
+              }
             >
-              {loginStatus === "logging-in"
-                ? "Connecting..."
-                : isAuthenticated
-                ? "Go to Dashboard"
-                : "Sign Up Free"}
+              {isAuthenticated ? "Go to Dashboard" : "Sign Up Free"}
             </Button>
           </div>
         </div>
@@ -225,12 +226,9 @@ export default function LandingPage() {
                     <Button
                       size="lg"
                       onClick={handleGetStarted}
-                      disabled={loginStatus === "logging-in"}
                       className="min-w-[200px]"
                     >
-                      {loginStatus === "logging-in"
-                        ? "Authenticating..."
-                        : isAuthenticated
+                      {isAuthenticated
                         ? "Authenticated ✓"
                         : "Try Passkey Login"}
                     </Button>
@@ -840,6 +838,12 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
+
+      {/* Login Modal */}
+      <LoginModal
+        open={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-12">

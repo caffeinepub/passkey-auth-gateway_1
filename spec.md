@@ -1,56 +1,41 @@
-# Avantkey — Draft 29
+# Avantkey
 
 ## Current State
-
-- `DashboardLayout.tsx`: Uses a sticky top header with horizontal nav links. Nav items for Dashboard, Webhooks, Docs, Billing, Cycles (admin), Audit Log (admin), Settings (non-viewer) are rendered as ghost/secondary Buttons in a `<nav>` element inside the header. A separate mobile nav scrolls horizontally below the header. A footer renders at the bottom.
-- `Docs.tsx`: Code blocks use `CodeBlock` component with a plain dark `bg-[oklch(0.13_0.02_240)]` container and a simple header bar showing the language label + copy button. No decorative chrome (no macOS traffic lights, no window frame, no title bar).
+- Full B2B SaaS Passkey Auth Gateway on ICP — Draft 30 live
+- Branded login modal (LoginModal.tsx) wrapping Internet Identity silently — Step 1 complete
+- Dashboard shows error: "Something went wrong / An unexpected error occurred" — caused by the generic fallback in getUserFriendlyError() being triggered when getOrCreateTenant() or getTenantMembers() fails with an unrecognized error string
+- The error is shown via ErrorCard in Dashboard.tsx when tenantError || membersError is set
+- Backend has verifyAuth() and validateSession() as public auth API functions
+- Sessions and EndUsers are stored in backend state (sessions, endUsers maps)
+- No delegation interceptor exists yet — II delegation flows directly to the canister
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Sidebar navigation** in `DashboardLayout.tsx`: A fixed left sidebar (240px wide on desktop) containing the Avantkey logo/wordmark at the top, nav items vertically stacked with icons and labels, a divider separating main nav from admin-only items, and a logout button at the bottom of the sidebar.
-- **Collapsible sidebar** for mobile: Use a Sheet/drawer component that slides in from the left, triggered by a hamburger icon in a slim top bar on mobile.
-- **MacOS browser window chrome** in `CodeBlock` component in `Docs.tsx`: Add a decorative window top bar with three traffic light circles (red `#FF5F57`, yellow `#FEBC2E`, green `#28C840`) and optionally a faux URL/filename bar. This wraps the existing code area.
-- **Colored syntax theme** in code blocks: Apply token-level color highlighting for keywords, strings, comments, functions, and types using inline `<span>` elements with themed colors (VS Code Dark+ / One Dark inspired palette):
-  - Keywords (`import`, `from`, `const`, `await`, `async`, `function`, `return`, `if`, `public`, `shared`, `func`): `#C678DD` (purple)
-  - Strings (quoted values): `#98C379` (green)
-  - Comments (lines starting with `//`): `#5C6370` italic (grey)
-  - Functions/method calls (word before `(`): `#61AFEF` (blue)
-  - Types/Builtins (`Text`, `Bool`, `Int`, `Nat`, `async`): `#E5C07B` (yellow/gold)
-  - Punctuation/operators: `#ABB2BF` (default text)
-  - Numbers: `#D19A66` (orange)
-  - JSON keys: `#E06C75` (red-ish)
-  - JSON values (strings): `#98C379` (green)
+- `registerDelegation(principalText: string, tenantId: string): async AvantKeySession` — backend function that accepts a caller's principal (from II delegation), creates or updates an Avantkey-issued session, logs the auth event to the audit log, and returns session metadata. This is the delegation interceptor: Avantkey canister becomes the session authority.
+- `getMySession(): async ?AvantKeySession` — query function to retrieve the current user's active Avantkey session (by caller principal)
+- `revokeMySession(): async ()` — function to revoke the caller's active Avantkey session
+- Frontend: `useRegisterDelegation()` hook that calls `registerDelegation` after login completes, stores the AvantKeySession in state
+- Frontend: Session context display in DashboardLayout header showing "Session active" badge with expiry info
+- Frontend: Dashboard shows Avantkey session info panel with session token (truncated), issued time, expiry, and revoke button
 
 ### Modify
-- `DashboardLayout.tsx`: Replace the sticky top header + horizontal nav with a two-panel flex layout: fixed sidebar on the left, main content area on the right. The top header is removed. The sidebar holds branding, nav items, and logout. Offline banner and cycle warning banner move to the top of the main content area. The footer either moves to the bottom of the main panel or is removed from the sidebar.
-- `Docs.tsx` `CodeBlock` component: Replace plain container with macOS window wrapper. Keep copy-on-click behavior. Language label moves to the faux URL/title bar area (center or left of traffic lights row).
+- `getUserFriendlyError()` in errorMessages.ts — add broader catch patterns for "anonymous calls not allowed", "trap", "reject", and any error containing "canister" to map to "Connection Issue" rather than falling through to the generic fallback. This fixes the dashboard error.
+- Dashboard.tsx — add improved error handling that shows the actual error detail in development/debug mode
 
 ### Remove
-- Top `<header>` element in `DashboardLayout.tsx` (replaced by sidebar).
-- Mobile horizontal scroll nav strip (replaced by hamburger + Sheet drawer).
+- Nothing removed
 
 ## Implementation Plan
-
-1. Rewrite `DashboardLayout.tsx`:
-   - Layout: `flex h-screen overflow-hidden` root. Sidebar is `w-60 shrink-0 flex flex-col border-r border-border bg-card h-screen sticky top-0`. Main panel is `flex-1 overflow-y-auto flex flex-col`.
-   - Sidebar sections: logo + tenant name at top, nav items in a `<nav>` in the middle (flex-1), divider, admin-only items, logout at bottom.
-   - Active nav item: `bg-primary/10 text-primary` background highlight with left accent bar `border-l-2 border-primary`.
-   - Mobile: hide sidebar with `hidden md:flex`, show a slim top bar with hamburger + logo. Use shadcn `Sheet` for drawer.
-   - Offline banner and CycleWarningBanner rendered at top of the main scroll area.
-   - Footer stays at bottom of main area.
-
-2. Rewrite `CodeBlock` in `Docs.tsx`:
-   - Outer wrapper: `rounded-xl overflow-hidden border border-border shadow-lg`.
-   - Traffic light bar: `flex items-center gap-1.5 px-4 py-3 bg-[oklch(0.18_0.02_240)]` with three `w-3 h-3 rounded-full` circles in red/yellow/green. Language label centered or after traffic lights as a faint text.
-   - Code area: `bg-[oklch(0.13_0.02_240)] p-4 overflow-x-auto text-sm font-mono leading-relaxed`.
-   - Copy button: moves to right side of traffic light bar.
-   - Add a `tokenize(code, language)` helper function that applies regex-based token coloring using inline `<span style={{color: ...}}>` elements. Handle: JavaScript/TypeScript, JSON, bash/shell, Motoko, HTTP. For unsupported languages, render as plain text.
+1. Fix getUserFriendlyError() to catch more backend error patterns (anonymous, trap, reject, canister errors)
+2. Generate backend: add registerDelegation(), getMySession(), revokeMySession() functions
+3. Frontend: add useRegisterDelegation hook that fires after login
+4. Frontend: wire session registration in App.tsx or DashboardLayout after identity is confirmed
+5. Frontend: add session panel to Dashboard showing session status, token, expiry, revoke button
 
 ## UX Notes
-- Sidebar width: 240px fixed, no collapse toggle needed for MVP.
-- Active state uses a subtle left border accent + tinted background — avoids heavy fills.
-- Admin-only nav items (Cycles, Audit Log) grouped below a "System" label/divider in the sidebar.
-- macOS traffic lights are purely decorative — they do not open/close anything.
-- Syntax highlighting is regex-based (no external library) to avoid build complexity.
-- Mobile sidebar drawer should close when a nav item is selected.
+- Session registration should be transparent — fires automatically after login, no user action needed
+- Session panel in dashboard is informational: shows that Avantkey has issued its own session on top of II
+- "Revoke Session" button lets users invalidate their session (forces re-login next time)
+- Session token shown as truncated: first 8 chars + "..." — never show full token in UI
+- Session expiry shown as human-readable "Expires in X hours" format

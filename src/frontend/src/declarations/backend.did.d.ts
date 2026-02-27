@@ -21,6 +21,14 @@ export interface AuditLogEntry {
   'success' : boolean,
   'eventType' : string,
 }
+export interface AvantKeySession {
+  'principal' : Principal,
+  'expiresAt' : Time,
+  'revoked' : boolean,
+  'tenantId' : TenantId,
+  'sessionId' : SessionId,
+  'issuedAt' : Time,
+}
 export interface CanisterAttestation {
   'network' : string,
   'version' : string,
@@ -57,6 +65,7 @@ export interface Session {
   'tenantId' : TenantId,
   'sessionToken' : string,
 }
+export type SessionId = string;
 export interface Tenant {
   'id' : TenantId,
   'apiKeyHash' : ApiKeyHash,
@@ -127,6 +136,7 @@ export interface _SERVICE {
     [TenantId],
     { 'authenticated' : bigint, 'failed' : bigint, 'registered' : bigint }
   >,
+  'getMySession' : ActorMethod<[], [] | [AvantKeySession]>,
   'getOrCreateTenant' : ActorMethod<[], Tenant>,
   'getRateLimitStatus' : ActorMethod<[ApiKeyHash], RateLimitStatus>,
   'getRateLimitStatusForCaller' : ActorMethod<[], RateLimitStatus>,
@@ -147,7 +157,9 @@ export interface _SERVICE {
   >,
   'recordWebhookEvent' : ActorMethod<[TenantId, boolean], undefined>,
   'regenerateApiKey' : ActorMethod<[], ApiKey>,
+  'registerDelegation' : ActorMethod<[TenantId], AvantKeySession>,
   'removeMember' : ActorMethod<[Principal], undefined>,
+  'revokeMySession' : ActorMethod<[], boolean>,
   'testWebhook' : ActorMethod<[], { 'status' : number, 'message' : string }>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateMemberRole' : ActorMethod<[Principal, Role], undefined>,

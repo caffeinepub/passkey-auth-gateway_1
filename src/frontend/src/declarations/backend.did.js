@@ -56,6 +56,15 @@ export const CanisterAttestation = IDL.Record({
   'canisterId' : IDL.Text,
 });
 export const Day = IDL.Nat;
+export const SessionId = IDL.Text;
+export const AvantKeySession = IDL.Record({
+  'principal' : IDL.Principal,
+  'expiresAt' : Time,
+  'revoked' : IDL.Bool,
+  'tenantId' : TenantId,
+  'sessionId' : SessionId,
+  'issuedAt' : Time,
+});
 export const RateLimitStatus = IDL.Record({
   'resetTimestamp' : Time,
   'used' : IDL.Nat,
@@ -149,6 +158,7 @@ export const idlService = IDL.Service({
       ],
       [],
     ),
+  'getMySession' : IDL.Func([], [IDL.Opt(AvantKeySession)], ['query']),
   'getOrCreateTenant' : IDL.Func([], [Tenant], []),
   'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
   'getRateLimitStatusForCaller' : IDL.Func([], [RateLimitStatus], []),
@@ -173,7 +183,9 @@ export const idlService = IDL.Service({
     ),
   'recordWebhookEvent' : IDL.Func([TenantId, IDL.Bool], [], []),
   'regenerateApiKey' : IDL.Func([], [ApiKey], []),
+  'registerDelegation' : IDL.Func([TenantId], [AvantKeySession], []),
   'removeMember' : IDL.Func([IDL.Principal], [], []),
+  'revokeMySession' : IDL.Func([], [IDL.Bool], []),
   'testWebhook' : IDL.Func(
       [],
       [IDL.Record({ 'status' : IDL.Nat16, 'message' : IDL.Text })],
@@ -245,6 +257,15 @@ export const idlFactory = ({ IDL }) => {
     'canisterId' : IDL.Text,
   });
   const Day = IDL.Nat;
+  const SessionId = IDL.Text;
+  const AvantKeySession = IDL.Record({
+    'principal' : IDL.Principal,
+    'expiresAt' : Time,
+    'revoked' : IDL.Bool,
+    'tenantId' : TenantId,
+    'sessionId' : SessionId,
+    'issuedAt' : Time,
+  });
   const RateLimitStatus = IDL.Record({
     'resetTimestamp' : Time,
     'used' : IDL.Nat,
@@ -339,6 +360,7 @@ export const idlFactory = ({ IDL }) => {
         ],
         [],
       ),
+    'getMySession' : IDL.Func([], [IDL.Opt(AvantKeySession)], ['query']),
     'getOrCreateTenant' : IDL.Func([], [Tenant], []),
     'getRateLimitStatus' : IDL.Func([ApiKeyHash], [RateLimitStatus], ['query']),
     'getRateLimitStatusForCaller' : IDL.Func([], [RateLimitStatus], []),
@@ -363,7 +385,9 @@ export const idlFactory = ({ IDL }) => {
       ),
     'recordWebhookEvent' : IDL.Func([TenantId, IDL.Bool], [], []),
     'regenerateApiKey' : IDL.Func([], [ApiKey], []),
+    'registerDelegation' : IDL.Func([TenantId], [AvantKeySession], []),
     'removeMember' : IDL.Func([IDL.Principal], [], []),
+    'revokeMySession' : IDL.Func([], [IDL.Bool], []),
     'testWebhook' : IDL.Func(
         [],
         [IDL.Record({ 'status' : IDL.Nat16, 'message' : IDL.Text })],

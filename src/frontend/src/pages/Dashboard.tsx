@@ -41,7 +41,7 @@ import {
   useGetEventBreakdown,
   useGetUserRole
 } from "../hooks/useQueries";
-import { Loader2, AlertCircle, Key, Copy, RefreshCw, Check, AlertTriangle, TrendingUp, Users, Activity, Webhook } from "lucide-react";
+import { Loader2, AlertCircle, Key, Copy, RefreshCw, Check, AlertTriangle, TrendingUp, Users, Activity, Webhook, Shield, ShieldOff, ShieldAlert } from "lucide-react";
 import type { Role } from "../backend";
 import { useState } from "react";
 import { useActor } from "../hooks/useActor";
@@ -50,6 +50,7 @@ import { getUserFriendlyError, getToastErrorMessage } from "../lib/errorMessages
 import { ErrorCard } from "../components/ErrorCard";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { toast } from "sonner";
+import { useAvantKeySession } from "../hooks/useAvantKeySession";
 
 /**
  * Truncate a principal for display
@@ -113,6 +114,42 @@ function getSuccessRateColor(rate: bigint): string {
 }
 
 /**
+ * Format a nanosecond timestamp as a short datetime string
+ */
+function formatTimestampShort(ns: bigint): string {
+  const ms = Number(ns / 1_000_000n);
+  return new Date(ms).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * Format how many hours/minutes until a nanosecond timestamp
+ */
+function formatRelativeExpiry(expiresAtNs: bigint): string {
+  const nowMs = Date.now();
+  const expiresMs = Number(expiresAtNs / 1_000_000n);
+  const diffMs = expiresMs - nowMs;
+
+  if (diffMs <= 0) return "Expired";
+
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (diffHours >= 24) {
+    const days = Math.floor(diffHours / 24);
+    return `in ${days} day${days !== 1 ? "s" : ""}`;
+  }
+  if (diffHours > 0) {
+    return `in ${diffHours}h ${diffMinutes}m`;
+  }
+  return `in ${diffMinutes}m`;
+}
+
+/**
  * Convert daily trend data to chart format
  */
 function formatTrendData(data: Array<[bigint, bigint]>): Array<{ date: string; value: number }> {
@@ -139,6 +176,7 @@ export default function Dashboard() {
     error: tenantError,
     refetch: refetchTenant,
   } = useGetCurrentTenant();
+  const { session, isLoading: sessionLoading, revokeSession } = useAvantKeySession();
   const {
     data: members,
     isLoading: membersLoading,
@@ -221,6 +259,29 @@ export default function Dashboard() {
     setIsRevealed(false);
     setCurrentApiKey(null);
   };
+
+  // Handle session revocation
+  const [isRevokingSession, setIsRevokingSession] = useState(false);
+  const handleRevokeSession = async () => {
+    setIsRevokingSession(true);
+    try {
+      await revokeSession();
+      toast.success("Session revoked");
+    } catch {
+      toast.error("Failed to revoke session");
+    } finally {
+      setIsRevokingSession(false);
+    }
+  };
+
+  // Determine session status
+  const sessionIsActive = session !== null && session !== undefined && !session.revoked;
+  const sessionIsRevoked = session !== null && session !== undefined && session.revoked;
+  const sessionIsExpired =
+    session !== null &&
+    session !== undefined &&
+    !session.revoked &&
+    Number(session.expiresAt / 1_000_000n) < Date.now();
 
   return (
     <div className="space-y-8">
@@ -508,6 +569,126 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+      {/* AvantKey Session Card */}
+      {tenant && !isLoading && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  Avantkey Session
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Your delegated session issued by Avantkey
+                </CardDescription>
+              </div>
+              {sessionIsActive && !sessionIsExpired && (
+                <Badge className="bg-success/15 text-success border-success/20 border">
+                  <span className="relative flex h-1.5 w-1.5 mr-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
+                  </span>
+                  Active
+                </Badge>
+              )}
+              {sessionIsExpired && (
+                <Badge variant="outline" className="text-warning border-warning/30">
+                  Expired
+                </Badge>
+              )}
+              {sessionIsRevoked && (
+                <Badge variant="outline" className="text-destructive border-destructive/30">
+                  Revoked
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {sessionLoading && !session ? (
+              <div className="flex items-center gap-3 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Registering delegation...</p>
+              </div>
+            ) : sessionIsRevoked || sessionIsExpired ? (
+              <div className="flex items-center gap-3 py-2 text-muted-foreground">
+                <ShieldOff className="w-4 h-4 shrink-0" />
+                <p className="text-sm">
+                  No active session.{" "}
+                  <span className="text-foreground/70">Re-authenticate to start a new session.</span>
+                </p>
+              </div>
+            ) : session ? (
+              <div className="space-y-4">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Session ID
+                    </dt>
+                    <dd className="text-sm font-mono text-foreground/80">
+                      {session.sessionId.slice(0, 12)}...
+                    </dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Issued At
+                    </dt>
+                    <dd className="text-sm text-foreground/80">
+                      {formatTimestampShort(session.issuedAt)}
+                    </dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Expires
+                    </dt>
+                    <dd className="text-sm text-foreground/80">
+                      {formatRelativeExpiry(session.expiresAt)}
+                    </dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Tenant ID
+                    </dt>
+                    <dd className="text-sm font-mono text-foreground/80 truncate">
+                      {session.tenantId}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="pt-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleRevokeSession}
+                    disabled={isRevokingSession}
+                  >
+                    {isRevokingSession ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Revoking...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="w-4 h-4 mr-2" />
+                        Revoke Session
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Registering delegation...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* API Key Card */}
       {tenant && !isLoading && (
         <Card className="shadow-card">

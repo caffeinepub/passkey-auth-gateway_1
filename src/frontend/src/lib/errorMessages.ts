@@ -180,11 +180,61 @@ export function getUserFriendlyError(error: unknown): FriendlyError {
     };
   }
 
+  // ICP / Canister trap errors (e.g. assertion failures, panics)
+  if (lowerMessage.includes("trap")) {
+    return {
+      title: "Service Error",
+      message:
+        "The backend rejected this request. Please reload and try again.",
+      canRetry: true,
+    };
+  }
+
+  // Anonymous caller errors (user not authenticated with Internet Identity)
+  if (lowerMessage.includes("anonymous")) {
+    return {
+      title: "Connection Issue",
+      message:
+        "We're having trouble connecting to the service. This might be temporary. Please try again in a moment.",
+      canRetry: true,
+    };
+  }
+
+  // Rejected calls (network-level or consensus-level rejections)
+  if (lowerMessage.includes("reject")) {
+    return {
+      title: "Connection Issue",
+      message:
+        "We're having trouble connecting to the service. This might be temporary. Please try again in a moment.",
+      canRetry: true,
+    };
+  }
+
+  // Generic canister errors not caught above
+  if (lowerMessage.includes("canister")) {
+    return {
+      title: "Connection Issue",
+      message:
+        "We're having trouble connecting to the service. This might be temporary. Please try again in a moment.",
+      canRetry: true,
+    };
+  }
+
+  // Actor initialization errors
+  if (lowerMessage.includes("actor not initialized")) {
+    return {
+      title: "Connection Issue",
+      message:
+        "We're having trouble connecting to the service. This might be temporary. Please try again in a moment.",
+      canRetry: true,
+    };
+  }
+
   // Default fallback
   return {
-    title: "Something went wrong",
+    title: "Unexpected Error",
     message:
-      "An unexpected error occurred. Please try again or contact support if the problem persists.",
+      "Something went wrong. Please reload the page and try again.",
     canRetry: true,
   };
 }
